@@ -36,7 +36,7 @@ class Settings:
     PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
 
     OUTPUT_DIR = Path("outputs")
-    LOG_DIR = Path("logs")
+    LOG_DIR = Path("static")
 
 
 SETTINGS = Settings()
