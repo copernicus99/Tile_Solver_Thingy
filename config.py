@@ -40,7 +40,9 @@ class Settings:
     # previous fixed behaviour.
     MAX_EDGE_RATIO = 0.6
     MAX_EDGE_FT = 6.0
-    MAX_EDGE_INSIDE_ONLY = True
+    # The 6 ft straight-edge limit applies to both internal seams and the board
+    # perimeter.
+    MAX_EDGE_INSIDE_ONLY = False
     PLUS_TOGGLE = True
     SAME_SHAPE_LIMIT = 1
 
