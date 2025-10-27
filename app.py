@@ -493,8 +493,14 @@ def _write_layout(path: Path, result: SolveResult) -> None:
         "#16a085",
         "#8e44ad",
     ]
-    for idx, placement in enumerate(result.placements):
-        color = palette[idx % len(palette)]
+    color_map: Dict[tuple[int, int], str] = {}
+    palette_index = 0
+    for placement in result.placements:
+        size_key = tuple(sorted((placement.width, placement.height)))
+        if size_key not in color_map:
+            color_map[size_key] = palette[palette_index % len(palette)]
+            palette_index += 1
+        color = color_map[size_key]
         left = placement.x * scale
         top = placement.y * scale
         width = placement.width * scale
