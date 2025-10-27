@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -7,7 +8,7 @@ class PhaseConfig:
     name: str
     allow_rotation: bool
     allow_discards: bool
-    time_limit_sec: int
+    time_limit_sec: Optional[float]
 
 
 class Settings:
@@ -29,10 +30,10 @@ class Settings:
     PLUS_TOGGLE = True
     SAME_SHAPE_LIMIT = 1
 
-    PHASE_A = PhaseConfig("Phase A", allow_rotation=False, allow_discards=False, time_limit_sec=600)
-    PHASE_B = PhaseConfig("Phase B", allow_rotation=True, allow_discards=False, time_limit_sec=600)
-    PHASE_C = PhaseConfig("Phase C", allow_rotation=False, allow_discards=False, time_limit_sec=600)
-    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=600)
+    PHASE_A = PhaseConfig("Phase A", allow_rotation=False, allow_discards=False, time_limit_sec=600.0)
+    PHASE_B = PhaseConfig("Phase B", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
+    PHASE_C = PhaseConfig("Phase C", allow_rotation=False, allow_discards=False, time_limit_sec=600.0)
+    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
 
     OUTPUT_DIR = Path("outputs")
     LOG_DIR = Path("logs")

@@ -247,7 +247,7 @@ def _selection_summary(selection: Dict[str, int]):
     return summary
 
 
-def _phase_limits() -> Dict[str, int]:
+def _phase_limits() -> Dict[str, Optional[float]]:
     return {name: config.time_limit_sec for name, config in PHASE_CONFIGS.items()}
 
 

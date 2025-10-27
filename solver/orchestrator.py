@@ -62,11 +62,15 @@ class TileSolverOrchestrator:
                 }
                 for phase in phases
             ],
-            total_allotment=sum(phase.time_limit_sec for phase in phases),
+            total_allotment=sum(
+                phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
+            ),
         )
         logs: List[PhaseLog] = []
         overall_start = time.time()
-        total_allotment = sum(phase.time_limit_sec for phase in phases)
+        total_allotment = sum(
+            phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
+        )
         candidate_boards = list(self._candidate_boards(total_area_ft))
         for phase_index, phase in enumerate(phases):
             phase_start = time.time()
@@ -83,14 +87,23 @@ class TileSolverOrchestrator:
                 overall_elapsed=time.time() - overall_start,
             )
             for attempt_index, (board_w, board_h) in enumerate(candidate_boards, start=1):
+                phase_limit = phase.time_limit_sec
+                if phase_limit is not None:
+                    elapsed_before_attempt = time.time() - phase_start
+                    remaining_time = phase_limit - elapsed_before_attempt
+                    if remaining_time <= 0:
+                        break
+                else:
+                    remaining_time = None
                 request = SolveRequest(tile_quantities, board_w, board_h, allow_rotation=phase.allow_rotation)
                 options = SolverOptions(
                     max_edge_cells=int(SETTINGS.MAX_EDGE_FT / self.unit_ft),
                     same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,
                     enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
-                    time_limit_sec=phase.time_limit_sec,
+                    time_limit_sec=remaining_time,
                 )
                 solver = BacktrackingSolver(request, options, self.unit_ft, phase.name)
+                attempt_limit = remaining_time if remaining_time is not None else phase.time_limit_sec
                 emit(
                     "attempt_started",
                     phase=phase.name,
@@ -99,7 +112,7 @@ class TileSolverOrchestrator:
                     board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                     board_size_cells=(board_w, board_h),
                     phase_index=phase_index,
-                    time_limit_sec=phase.time_limit_sec,
+                    time_limit_sec=attempt_limit,
                     overall_elapsed=time.time() - overall_start,
                     phase_elapsed=time.time() - phase_start,
                 )
@@ -116,12 +129,23 @@ class TileSolverOrchestrator:
                 )
                 attempts.append(attempt)
                 phase_elapsed = time.time() - phase_start
-                prev_allotment = sum(p.time_limit_sec for p in phases[:phase_index])
+                prev_allotment = sum(
+                    p.time_limit_sec or 0.0
+                    for p in phases[:phase_index]
+                    if p.time_limit_sec is not None
+                )
                 overall_progress = 0.0
                 if total_allotment > 0:
+                    phase_cap = phase.time_limit_sec or 0.0
                     overall_progress = min(
-                        (prev_allotment + min(phase_elapsed, phase.time_limit_sec)) / total_allotment,
+                        (prev_allotment + min(phase_elapsed, phase_cap)) / total_allotment,
                         1.0,
+                    )
+                remaining_after_attempt = None
+                if phase_limit is not None:
+                    remaining_after_attempt = max(
+                        phase_limit - (time.time() - phase_start),
+                        0.0,
                     )
                 emit(
                     "attempt_completed",
@@ -134,16 +158,27 @@ class TileSolverOrchestrator:
                     success=solve_result is not None,
                     backtracks=solver.stats.backtracks,
                     phase_index=phase_index,
-                    time_limit_sec=phase.time_limit_sec,
+                    time_limit_sec=(
+                        remaining_after_attempt
+                        if phase_limit is not None
+                        else phase.time_limit_sec
+                    ),
                     overall_elapsed=time.time() - overall_start,
                     phase_elapsed=phase_elapsed,
-                    phase_progress=min(phase_elapsed / phase.time_limit_sec, 1.0)
-                    if phase.time_limit_sec
-                    else 1.0,
+                    phase_progress=(
+                        min(phase_elapsed / phase.time_limit_sec, 1.0)
+                        if phase.time_limit_sec
+                        else 0.0
+                    ),
                     overall_progress=overall_progress,
                 )
                 if solve_result:
                     result = solve_result
+                    break
+                if (
+                    phase_limit is not None
+                    and time.time() - phase_start >= phase_limit
+                ):
                     break
             total_elapsed = time.time() - phase_start
             logs.append(PhaseLog(phase.name, attempts, total_elapsed, result))
