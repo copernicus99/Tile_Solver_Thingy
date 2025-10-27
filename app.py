@@ -1,8 +1,24 @@
 from __future__ import annotations
 
-from typing import Dict, List
+import json
+import queue
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional
 
-from flask import Flask, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    Response,
+    abort,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    stream_with_context,
+)
 
 from config import SETTINGS
 from solver.models import SolveResult
@@ -12,6 +28,71 @@ app = Flask(__name__)
 app.secret_key = "tile-solver-secret"
 
 orchestrator = TileSolverOrchestrator()
+
+
+@dataclass
+class RunState:
+    queue: "queue.Queue[Dict[str, object]]"
+    result: Optional[SolveResult] = None
+    logs: Optional[List[PhaseLog]] = None
+    error: Optional[str] = None
+    done: bool = False
+    thread: Optional[threading.Thread] = None
+    created_at: float = field(default_factory=time.time)
+
+
+class RunManager:
+    def __init__(self) -> None:
+        self._runs: Dict[str, RunState] = {}
+        self._lock = threading.Lock()
+
+    def start_run(self, selection: Dict[str, int]) -> str:
+        run_id = uuid.uuid4().hex
+        state = RunState(queue.Queue())
+        with self._lock:
+            self._runs[run_id] = state
+        thread = threading.Thread(
+            target=self._worker,
+            args=(run_id, selection),
+            daemon=True,
+        )
+        state.thread = thread
+        thread.start()
+        return run_id
+
+    def get_state(self, run_id: str) -> Optional[RunState]:
+        with self._lock:
+            return self._runs.get(run_id)
+
+    def _worker(self, run_id: str, selection: Dict[str, int]) -> None:
+        state = self.get_state(run_id)
+        if state is None:
+            return
+
+        def progress(event: Dict[str, object]) -> None:
+            event.setdefault("run_id", run_id)
+            state.queue.put(event)
+
+        try:
+            result, logs = orchestrator.solve(selection, progress_callback=progress)
+            state.result = result
+            state.logs = logs
+        except ValueError as exc:
+            state.error = str(exc)
+            state.queue.put({"type": "error", "message": state.error, "run_id": run_id})
+        finally:
+            state.done = True
+            state.queue.put(
+                {
+                    "type": "finished",
+                    "success": state.result is not None,
+                    "error": state.error,
+                    "run_id": run_id,
+                }
+            )
+
+
+run_manager = RunManager()
 
 
 @app.route("/")
@@ -25,14 +106,7 @@ def index():
 
 @app.route("/solve", methods=["POST"])
 def solve_tiles():
-    selection: Dict[str, int] = {}
-    for name in SETTINGS.TILE_OPTIONS:
-        value = request.form.get(name)
-        try:
-            count = int(value)
-        except (TypeError, ValueError):
-            count = 0
-        selection[name] = max(0, min(10, count))
+    selection = _parse_selection(request.form)
     try:
         result, logs = orchestrator.solve(selection)
     except ValueError as exc:
@@ -55,6 +129,61 @@ def solve_tiles():
     )
 
 
+@app.route("/runs", methods=["POST"])
+def start_run():
+    selection = _parse_selection(request.form)
+    run_id = run_manager.start_run(selection)
+    return jsonify({"run_id": run_id}), 202
+
+
+@app.route("/runs/<run_id>/stream")
+def stream_run(run_id: str):
+    state = run_manager.get_state(run_id)
+    if state is None:
+        abort(404)
+
+    def event_stream():
+        while True:
+            if state.done and state.queue.empty():
+                break
+            try:
+                event = state.queue.get(timeout=1)
+            except queue.Empty:
+                continue
+            yield f"data: {json.dumps(event)}\n\n"
+        yield "event: end\ndata: {}\n\n"
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+
+
+@app.route("/runs/<run_id>/result")
+def run_result(run_id: str):
+    state = run_manager.get_state(run_id)
+    if state is None:
+        abort(404)
+    if not state.done:
+        return "", 202
+    logs = state.logs or []
+    if state.error:
+        return render_template(
+            "results_form.html",
+            result=None,
+            logs=logs,
+            error=state.error,
+            outputs={},
+            config=SETTINGS,
+        )
+    outputs = _write_outputs(state.result, logs) if state.result else {}
+    return render_template(
+        "results_form.html",
+        result=state.result,
+        logs=logs,
+        outputs=outputs,
+        error=None if state.result else "No solution within the provided timeframes",
+        config=SETTINGS,
+    )
+
+
 @app.route("/outputs/<path:filename>")
 def serve_output(filename: str):
     return send_from_directory(SETTINGS.OUTPUT_DIR, filename)
@@ -63,6 +192,18 @@ def serve_output(filename: str):
 @app.route("/logs/<path:filename>")
 def serve_log(filename: str):
     return send_from_directory(SETTINGS.LOG_DIR, filename, as_attachment=True)
+
+
+def _parse_selection(form_data) -> Dict[str, int]:
+    selection: Dict[str, int] = {}
+    for name in SETTINGS.TILE_OPTIONS:
+        value = form_data.get(name)
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            count = 0
+        selection[name] = max(0, min(10, count))
+    return selection
 
 
 def _write_outputs(result: SolveResult | None, logs: List[PhaseLog]):
