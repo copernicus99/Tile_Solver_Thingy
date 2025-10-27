@@ -153,6 +153,10 @@ button[type="submit"]:hover {
     margin: 0;
 }
 
+.overlay-stats .full-row {
+    grid-column: 1 / -1;
+}
+
 .overlay-stats div {
     background: rgba(11, 14, 17, 0.35);
     padding: 0.75rem 1rem;
