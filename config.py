@@ -50,7 +50,7 @@ class Settings:
         allow_discards=False,
         allow_pop_outs=False,
         time_limit_sec=600.0,
-        first_board_time_share=1.0,
+        first_board_time_share=.2,
     )
     PHASE_B = PhaseConfig(
         "Phase B",
@@ -58,7 +58,7 @@ class Settings:
         allow_discards=True,
         allow_pop_outs=True,
         time_limit_sec=600.0,
-        first_board_time_share=1.0,
+        first_board_time_share=.2,
     )
     PHASE_C = PhaseConfig(
         "Phase C",
@@ -66,7 +66,7 @@ class Settings:
         allow_discards=False,
         allow_pop_outs=False,
         time_limit_sec=600.0,
-        first_board_time_share=1.0,
+        first_board_time_share=.2,
     )
     PHASE_D = PhaseConfig(
         "Phase D",
@@ -74,7 +74,7 @@ class Settings:
         allow_discards=True,
         allow_pop_outs=True,
         time_limit_sec=600.0,
-        first_board_time_share=1.0,
+        first_board_time_share=.2,
     )
 
     OUTPUT_DIR = Path("outputs")
