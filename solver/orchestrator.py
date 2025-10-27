@@ -102,7 +102,48 @@ class TileSolverOrchestrator:
                     enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
                     time_limit_sec=remaining_time,
                 )
-                solver = BacktrackingSolver(request, options, self.unit_ft, phase.name)
+                def report_solver_progress(solver_instance: BacktrackingSolver) -> None:
+                    phase_elapsed = time.time() - phase_start
+                    prev_allotment = sum(
+                        p.time_limit_sec or 0.0
+                        for p in phases[:phase_index]
+                        if p.time_limit_sec is not None
+                    )
+                    overall_progress = 0.0
+                    if total_allotment > 0:
+                        phase_cap = phase.time_limit_sec or 0.0
+                        overall_progress = min(
+                            (prev_allotment + min(phase_elapsed, phase_cap)) / total_allotment,
+                            1.0,
+                        )
+                    emit(
+                        "attempt_progress",
+                        phase=phase.name,
+                        attempt_index=attempt_index,
+                        total_attempts=len(candidate_boards),
+                        board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
+                        board_size_cells=(board_w, board_h),
+                        phase_index=phase_index,
+                        time_limit_sec=attempt_limit,
+                        overall_elapsed=time.time() - overall_start,
+                        phase_elapsed=phase_elapsed,
+                        phase_progress=(
+                            min(phase_elapsed / phase.time_limit_sec, 1.0)
+                            if phase.time_limit_sec
+                            else 0.0
+                        ),
+                        overall_progress=overall_progress,
+                        attempt_elapsed=solver_instance.stats.elapsed,
+                        backtracks=solver_instance.stats.backtracks,
+                    )
+
+                solver = BacktrackingSolver(
+                    request,
+                    options,
+                    self.unit_ft,
+                    phase.name,
+                    progress_callback=report_solver_progress,
+                )
                 attempt_limit = remaining_time if remaining_time is not None else phase.time_limit_sec
                 emit(
                     "attempt_started",

@@ -218,6 +218,30 @@
                     }
                     statusText.textContent = data.success ? 'Layout found!' : 'Exploring layouts…';
                     break;
+                case 'attempt_progress':
+                    statusText.textContent = 'Exploring layouts…';
+                    if (Array.isArray(data.board_size_ft)) {
+                        const boardLabel = formatBoardSize(data.board_size_ft);
+                        gridText.textContent = boardLabel;
+                        const parts = [];
+                        parts.push(`${data.attempt_index} of ${data.total_attempts}`);
+                        if (data.time_limit_sec != null) {
+                            parts.push(`≤ ${formatSeconds(data.time_limit_sec)}`);
+                        }
+                        if (typeof data.attempt_elapsed === 'number') {
+                            parts.push(`${formatSeconds(data.attempt_elapsed)} elapsed`);
+                        }
+                        if (typeof data.backtracks === 'number') {
+                            parts.push(`${data.backtracks} backtracks`);
+                        }
+                        attemptText.textContent = `${boardLabel} (${parts.join(', ')})`;
+                    }
+                    elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
+                    if (data.overall_progress != null) {
+                        updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
+                    }
+                    break;
                 case 'phase_completed':
                     statusText.textContent = data.success ? `${data.phase} complete` : `${data.phase} exhausted`;
                     updateProgress(phaseProgressBar, phaseProgressLabel, 100);
