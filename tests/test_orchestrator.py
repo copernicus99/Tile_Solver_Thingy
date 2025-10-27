@@ -1,6 +1,8 @@
 import unittest
+from unittest import mock
 
 from solver.orchestrator import TileSolverOrchestrator
+from solver.models import SolverStats
 
 
 class CandidateBoardTests(unittest.TestCase):
@@ -31,6 +33,35 @@ class CandidateBoardTests(unittest.TestCase):
         candidates = self.orchestrator._candidate_boards(0.3)
         expected = [(2, 2)] * 6
         self.assertEqual(expected, candidates)
+
+
+class SolverOptionTests(unittest.TestCase):
+    def test_perimeter_edges_are_included_in_straight_edge_limit(self):
+        orchestrator = TileSolverOrchestrator()
+        captured_options = []
+
+        class FakeSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+                captured_options.append(options)
+
+            def solve(self):
+                return None
+
+        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(14, 14)]), mock.patch(
+            "solver.orchestrator.BacktrackingSolver", FakeSolver
+        ):
+            orchestrator.solve({"1x1": 1})
+
+        self.assertTrue(captured_options, "Solver should have been invoked at least once")
+        self.assertTrue(
+            captured_options[0].max_edge_include_perimeter,
+            "Perimeter seams must be included when enforcing straight-edge limits.",
+        )
 
 
 if __name__ == "__main__":
