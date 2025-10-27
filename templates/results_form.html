@@ -40,17 +40,35 @@
             </ul>
         </div>
         {% endif %}
+        {% if selection_summary %}
+        <div class="results-container">
+            <h2>Selected Tiles</h2>
+            <ul class="tile-selection-list">
+                {% for tile in selection_summary %}
+                <li>
+                    <strong>{{ tile.display_name }}</strong>
+                    (<span>{{ tile.dimensions_label }}</span>) —
+                    {{ tile.count }} tile{% if tile.count != 1 %}s{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
         <div class="results-container">
             <h2>Phase Summary</h2>
             {% if logs %}
             <ul>
                 {% for entry in logs %}
                 <li>
-                    <strong>{{ entry.phase_name }}</strong> — {{ '%.2f'|format(entry.total_elapsed) }}s total
+                    {% set phase_limit = phase_limits.get(entry.phase_name) %}
+                    <strong>{{ entry.phase_name }}</strong> — {{ '%.4f'|format(entry.total_elapsed) }}s total
+                    {% if phase_limit is not none %}
+                    (limit {{ format_seconds(phase_limit) }})
+                    {% endif %}
                     <ul>
                         {% for attempt in entry.attempts %}
                         <li>
-                            Board {{ '%.2f'|format(attempt.board_size_ft[0]) }} ft × {{ '%.2f'|format(attempt.board_size_ft[1]) }} ft — {{ '%.2f'|format(attempt.elapsed) }}s,
+                            Board {{ '%.2f'|format(attempt.board_size_ft[0]) }} ft × {{ '%.2f'|format(attempt.board_size_ft[1]) }} ft — {{ '%.4f'|format(attempt.elapsed) }}s,
                             backtracks {{ attempt.backtracks }}, success {{ 'yes' if attempt.success else 'no' }}
                         </li>
                         {% endfor %}

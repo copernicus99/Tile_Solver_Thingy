@@ -29,6 +29,16 @@ app.secret_key = "tile-solver-secret"
 
 orchestrator = TileSolverOrchestrator()
 
+PHASE_CONFIGS = {
+    phase.name: phase
+    for phase in (
+        SETTINGS.PHASE_A,
+        SETTINGS.PHASE_B,
+        SETTINGS.PHASE_C,
+        SETTINGS.PHASE_D,
+    )
+}
+
 
 @dataclass
 class RunState:
@@ -39,6 +49,7 @@ class RunState:
     done: bool = False
     thread: Optional[threading.Thread] = None
     created_at: float = field(default_factory=time.time)
+    selection: Dict[str, int] = field(default_factory=dict)
 
 
 class RunManager:
@@ -48,7 +59,7 @@ class RunManager:
 
     def start_run(self, selection: Dict[str, int]) -> str:
         run_id = uuid.uuid4().hex
-        state = RunState(queue.Queue())
+        state = RunState(queue.Queue(), selection=dict(selection))
         with self._lock:
             self._runs[run_id] = state
         thread = threading.Thread(
@@ -107,6 +118,7 @@ def index():
 @app.route("/solve", methods=["POST"])
 def solve_tiles():
     selection = _parse_selection(request.form)
+    selection_summary = _selection_summary(selection)
     try:
         result, logs = orchestrator.solve(selection)
     except ValueError as exc:
@@ -117,6 +129,8 @@ def solve_tiles():
             error=str(exc),
             outputs={},
             config=SETTINGS,
+            selection_summary=selection_summary,
+            phase_limits=_phase_limits(),
         )
     outputs = _write_outputs(result, logs) if result else {}
     return render_template(
@@ -126,6 +140,8 @@ def solve_tiles():
         outputs=outputs,
         error=None if result else "No solution within the provided timeframes",
         config=SETTINGS,
+        selection_summary=selection_summary,
+        phase_limits=_phase_limits(),
     )
 
 
@@ -164,6 +180,7 @@ def run_result(run_id: str):
     if not state.done:
         return "", 202
     logs = state.logs or []
+    selection_summary = _selection_summary(state.selection)
     if state.error:
         return render_template(
             "results_form.html",
@@ -172,6 +189,8 @@ def run_result(run_id: str):
             error=state.error,
             outputs={},
             config=SETTINGS,
+            selection_summary=selection_summary,
+            phase_limits=_phase_limits(),
         )
     outputs = _write_outputs(state.result, logs) if state.result else {}
     return render_template(
@@ -181,6 +200,8 @@ def run_result(run_id: str):
         outputs=outputs,
         error=None if state.result else "No solution within the provided timeframes",
         config=SETTINGS,
+        selection_summary=selection_summary,
+        phase_limits=_phase_limits(),
     )
 
 
@@ -204,6 +225,47 @@ def _parse_selection(form_data) -> Dict[str, int]:
             count = 0
         selection[name] = max(0, min(10, count))
     return selection
+
+
+def _selection_summary(selection: Dict[str, int]):
+    summary = []
+    for tile_name, dims in SETTINGS.TILE_OPTIONS.items():
+        count = selection.get(tile_name, 0)
+        if count <= 0:
+            continue
+        width_ft, height_ft = dims
+        summary.append(
+            {
+                "name": tile_name,
+                "count": count,
+                "width_ft": width_ft,
+                "height_ft": height_ft,
+                "display_name": f"{tile_name.replace('x', ' ft × ')} ft tile",
+                "dimensions_label": f"{width_ft:.1f} ft × {height_ft:.1f} ft",
+            }
+        )
+    return summary
+
+
+def _phase_limits() -> Dict[str, int]:
+    return {name: config.time_limit_sec for name, config in PHASE_CONFIGS.items()}
+
+
+def _format_seconds(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "No limit"
+    seconds_int = int(round(seconds))
+    if seconds_int < 0:
+        return "0s"
+    minutes, secs = divmod(seconds_int, 60)
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+@app.context_processor
+def inject_helpers():
+    return {"format_seconds": _format_seconds}
 
 
 def _write_outputs(result: SolveResult | None, logs: List[PhaseLog]):
