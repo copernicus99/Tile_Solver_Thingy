@@ -12,7 +12,7 @@ class SolverOptions:
     max_edge_cells: int
     same_shape_limit: int
     enforce_plus_rule: bool
-    time_limit_sec: int
+    time_limit_sec: Optional[float]
 
 
 class BacktrackingSolver:
@@ -64,7 +64,10 @@ class BacktrackingSolver:
     def _time_remaining(self) -> bool:
         elapsed = time.time() - self._start_time
         self.stats.elapsed = elapsed
-        return elapsed <= self.options.time_limit_sec
+        limit = self.options.time_limit_sec
+        if limit is None:
+            return True
+        return elapsed <= limit
 
     def _search(self) -> bool:
         if not self._time_remaining():
