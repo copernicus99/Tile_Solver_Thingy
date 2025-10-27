@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
@@ -15,8 +15,18 @@ class SolverOptions:
     time_limit_sec: Optional[float]
 
 
+ProgressCallback = Callable[["BacktrackingSolver"], None]
+
+
 class BacktrackingSolver:
-    def __init__(self, request: SolveRequest, options: SolverOptions, unit_ft: float, phase_name: str) -> None:
+    def __init__(
+        self,
+        request: SolveRequest,
+        options: SolverOptions,
+        unit_ft: float,
+        phase_name: str,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
         self.request = request
         self.options = options
         self.unit_ft = unit_ft
@@ -28,9 +38,11 @@ class BacktrackingSolver:
         self.placements: Dict[int, Placement] = {}
         self.stats = SolverStats()
         self._start_time = 0.0
+        self._last_progress_report = 0.0
         self._tile_shapes: Dict[int, TileType] = {}
         self._width_cache: Dict[Tuple[frozenset[int], int], bool] = {}
         self._height_cache: Dict[Tuple[frozenset[int], int], bool] = {}
+        self._progress_callback = progress_callback
         self._build_tiles()
 
     def _build_tiles(self) -> None:
@@ -63,9 +75,19 @@ class BacktrackingSolver:
             discarded_tiles=discarded,
         )
 
+    def _report_progress(self) -> None:
+        if not self._progress_callback:
+            return
+        now = time.time()
+        if now - self._last_progress_report < 0.25:
+            return
+        self._last_progress_report = now
+        self._progress_callback(self)
+
     def _time_remaining(self) -> bool:
         elapsed = time.time() - self._start_time
         self.stats.elapsed = elapsed
+        self._report_progress()
         limit = self.options.time_limit_sec
         if limit is None:
             return True
