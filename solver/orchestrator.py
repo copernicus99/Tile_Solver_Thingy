@@ -273,19 +273,44 @@ class TileSolverOrchestrator:
                 quantities[tile_type] = count
         return quantities
 
-    def _candidate_boards(self, total_area_ft: float) -> Iterable[Tuple[int, int]]:
-        cell_area = total_area_ft / (self.unit_ft ** 2)
-        area_cells = int(round(cell_area))
+    def _candidate_boards(self, total_area_ft: float) -> List[Tuple[int, int]]:
+        if total_area_ft <= 0:
+            return []
+
+        padded_area_ft = math.ceil(total_area_ft)
+        if padded_area_ft <= 0:
+            return []
+
+        unit_area = self.unit_ft ** 2
+        cells_area = padded_area_ft / unit_area
+        area_cells = int(round(cells_area))
         if area_cells <= 0:
             return []
-        if not math.isclose(cell_area, area_cells, rel_tol=0.0, abs_tol=1e-6):
+        if not math.isclose(cells_area, area_cells, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError(
                 "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
             )
-        side_length = int(math.isqrt(area_cells))
-        if side_length == 0:
-            return []
-        return [(side_length, side_length)]
+
+        starting_side_ft = max(1, int(math.ceil(math.sqrt(padded_area_ft))))
+
+        def ft_to_cells(feet: int) -> int:
+            cells = feet / self.unit_ft
+            rounded = int(round(cells))
+            if rounded <= 0:
+                return 1
+            if not math.isclose(cells, rounded, rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError(
+                    "Board dimensions must align with the grid size defined by GRID_UNIT_FT."
+                )
+            return rounded
+
+        boards: List[Tuple[int, int]] = []
+        for reduction in range(6):
+            side_ft = max(1, starting_side_ft - reduction)
+            cells = ft_to_cells(side_ft)
+            boards.append((cells, cells))
+
+        return boards
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]
