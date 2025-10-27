@@ -10,21 +10,29 @@ Run started.
   Total allotted time: 1200.00s
 Phase 1 (Phase C) started. Time limit: 600.00s.
 Attempt 1 started on board 12.00ft x 12.00ft.
-Attempt 1 completed in 600.11s (success: no, backtracks: 387662).
-Phase Phase C completed in 600.11s (success: no).
-Phase 2 (Phase D) started. Time limit: 600.00s.
-Attempt 1 started on board 12.00ft x 12.00ft.
-Attempt 1 completed in 600.11s (success: no, backtracks: 462136).
-Phase Phase D completed in 600.11s (success: no).
-Run completed in 1200.23s (success: no).
+Attempt 1 completed in 120.05s (success: no, backtracks: 118797).
+Attempt 2 started on board 11.00ft x 11.00ft.
+Attempt 2 completed in 96.05s (success: no, backtracks: 119237).
+Attempt 3 started on board 10.00ft x 10.00ft.
+Attempt 3 completed in 96.04s (success: no, backtracks: 125259).
+Attempt 4 started on board 9.00ft x 9.00ft.
+Attempt 4 completed in 96.03s (success: no, backtracks: 146075).
+Attempt 5 started on board 8.00ft x 8.00ft.
+Attempt 5 completed in 96.02s (success: no, backtracks: 155814).
+Attempt 6 started on board 7.00ft x 7.00ft.
+Attempt 6 completed in 0.20s (success: yes, backtracks: 382).
+Phase Phase C completed in 504.41s (success: yes).
+Run completed in 504.41s (success: yes).
 
 Summary:
 Phase C
-  Total elapsed: 600.11s
-  Board 12.00ft x 12.00ft | elapsed=600.11s | backtracks=387662 | success=no
+  Total elapsed: 504.41s
+  Board 12.00ft x 12.00ft | elapsed=120.05s | backtracks=118797 | success=no
+  Board 11.00ft x 11.00ft | elapsed=96.05s | backtracks=119237 | success=no
+  Board 10.00ft x 10.00ft | elapsed=96.04s | backtracks=125259 | success=no
+  Board 9.00ft x 9.00ft | elapsed=96.03s | backtracks=146075 | success=no
+  Board 8.00ft x 8.00ft | elapsed=96.02s | backtracks=155814 | success=no
+  Board 7.00ft x 7.00ft | elapsed=0.20s | backtracks=382 | success=yes
+  Result achieved
 
-Phase D
-  Total elapsed: 600.11s
-  Board 12.00ft x 12.00ft | elapsed=600.11s | backtracks=462136 | success=no
-
-Run completed without a solution.
+Run ended with a successful solution.
