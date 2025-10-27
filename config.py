@@ -31,9 +31,9 @@ class Settings:
     SAME_SHAPE_LIMIT = 1
 
     PHASE_A = PhaseConfig("Phase A", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
-    PHASE_B = PhaseConfig("Phase B", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
+    PHASE_B = PhaseConfig("Phase B", allow_rotation=True, allow_discards=True, time_limit_sec=600.0)
     PHASE_C = PhaseConfig("Phase C", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
-    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=600.0)
+    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=True, time_limit_sec=600.0)
 
     OUTPUT_DIR = Path("outputs")
     LOG_DIR = Path("static")
