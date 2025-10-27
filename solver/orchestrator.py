@@ -190,22 +190,20 @@ class TileSolverOrchestrator:
         return quantities
 
     def _candidate_boards(self, total_area_ft: float) -> Iterable[Tuple[int, int]]:
-        area_cells = int(round(total_area_ft / (self.unit_ft ** 2)))
+        cell_area = total_area_ft / (self.unit_ft ** 2)
+        area_cells = int(round(cell_area))
         if area_cells <= 0:
             return []
-        candidates = set()
-        for width in range(1, int(math.sqrt(area_cells)) + 1):
-            if area_cells % width == 0:
-                height = area_cells // width
-                candidates.add((width, height))
-                candidates.add((height, width))
-        start_leg = math.ceil(math.sqrt(total_area_ft))
-        target_dim = int(math.ceil((start_leg + 2) / self.unit_ft))
-        def sort_key(dim: Tuple[int, int]):
-            w, h = dim
-            return (abs(w - h), abs(w - target_dim) + abs(h - target_dim), -min(w, h))
-        sorted_candidates = sorted(candidates, key=sort_key)
-        return sorted_candidates
+        if not math.isclose(cell_area, area_cells, rel_tol=0.0, abs_tol=1e-6):
+            raise ValueError(
+                "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
+            )
+        side = math.isqrt(area_cells)
+        if side * side != area_cells:
+            raise ValueError(
+                "Tile selection requires a square layout. Adjust tile quantities so the total area forms a square."
+            )
+        return [(side, side)]
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]
