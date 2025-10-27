@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
-from config import SETTINGS
+from config import SETTINGS, PhaseConfig
 from .backtracking_solver import BacktrackingSolver, SolverOptions
 from .models import SolveRequest, SolveResult, TileType
 
@@ -88,6 +88,7 @@ class TileSolverOrchestrator:
                 phase_count=len(phases),
                 overall_elapsed=time.time() - overall_start,
             )
+            total_attempts = len(candidate_boards)
             for attempt_index, (board_w, board_h) in enumerate(candidate_boards, start=1):
                 phase_limit = phase.time_limit_sec
                 if phase_limit is not None:
@@ -95,8 +96,17 @@ class TileSolverOrchestrator:
                     remaining_time = phase_limit - elapsed_before_attempt
                     if remaining_time <= 0:
                         break
+                    attempt_limit = self._attempt_time_limit(
+                        phase,
+                        attempt_index,
+                        total_attempts,
+                        remaining_time,
+                    )
+                    if attempt_limit <= 0:
+                        break
                 else:
                     remaining_time = None
+                    attempt_limit = None
                 request = SolveRequest(
                     tile_quantities,
                     board_w,
@@ -108,8 +118,9 @@ class TileSolverOrchestrator:
                     max_edge_cells=int(SETTINGS.MAX_EDGE_FT / self.unit_ft),
                     same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,
                     enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
-                    time_limit_sec=remaining_time,
+                    time_limit_sec=attempt_limit,
                 )
+                attempt_limit_value = attempt_limit
                 def report_solver_progress(solver_instance: BacktrackingSolver) -> None:
                     phase_elapsed = time.time() - phase_start
                     prev_allotment = sum(
@@ -128,11 +139,11 @@ class TileSolverOrchestrator:
                         "attempt_progress",
                         phase=phase.name,
                         attempt_index=attempt_index,
-                        total_attempts=len(candidate_boards),
+                        total_attempts=total_attempts,
                         board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                         board_size_cells=(board_w, board_h),
                         phase_index=phase_index,
-                        time_limit_sec=attempt_limit,
+                        time_limit_sec=attempt_limit_value,
                         overall_elapsed=time.time() - overall_start,
                         phase_elapsed=phase_elapsed,
                         phase_progress=(
@@ -152,16 +163,15 @@ class TileSolverOrchestrator:
                     phase.name,
                     progress_callback=report_solver_progress,
                 )
-                attempt_limit = remaining_time if remaining_time is not None else phase.time_limit_sec
                 emit(
                     "attempt_started",
                     phase=phase.name,
                     attempt_index=attempt_index,
-                    total_attempts=len(candidate_boards),
+                    total_attempts=total_attempts,
                     board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                     board_size_cells=(board_w, board_h),
                     phase_index=phase_index,
-                    time_limit_sec=attempt_limit,
+                    time_limit_sec=attempt_limit_value,
                     overall_elapsed=time.time() - overall_start,
                     phase_elapsed=time.time() - phase_start,
                 )
@@ -200,18 +210,15 @@ class TileSolverOrchestrator:
                     "attempt_completed",
                     phase=phase.name,
                     attempt_index=attempt_index,
-                    total_attempts=len(candidate_boards),
+                    total_attempts=total_attempts,
                     board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                     board_size_cells=(board_w, board_h),
                     elapsed=elapsed,
                     success=solve_result is not None,
                     backtracks=solver.stats.backtracks,
                     phase_index=phase_index,
-                    time_limit_sec=(
-                        remaining_after_attempt
-                        if phase_limit is not None
-                        else phase.time_limit_sec
-                    ),
+                    time_limit_sec=attempt_limit_value,
+                    remaining_phase_time_sec=remaining_after_attempt,
                     overall_elapsed=time.time() - overall_start,
                     phase_elapsed=phase_elapsed,
                     phase_progress=(
@@ -255,6 +262,32 @@ class TileSolverOrchestrator:
             overall_progress=1.0,
         )
         return None, logs
+
+    def _attempt_time_limit(
+        self,
+        phase: PhaseConfig,
+        attempt_index: int,
+        total_attempts: int,
+        remaining_time: float,
+    ) -> float:
+        phase_limit = phase.time_limit_sec
+        if phase_limit is None:
+            return remaining_time
+        first_share = min(max(phase.first_board_time_share, 0.0), 1.0)
+        additional_slots = min(5, max(total_attempts - 1, 0))
+        if additional_slots == 0 and total_attempts <= 1:
+            # Allow the lone attempt to consume the entire phase allotment.
+            first_share = 1.0
+        remainder_share = max(0.0, 1.0 - first_share)
+        if attempt_index == 1:
+            share = first_share
+        elif additional_slots > 0 and attempt_index <= 1 + additional_slots:
+            share = remainder_share / additional_slots if additional_slots else 0.0
+        else:
+            share = 0.0
+        attempt_cap = phase_limit * share
+        limit = min(remaining_time, attempt_cap)
+        return max(0.0, limit)
 
     def _select_phases(self, total_area_ft: float):
         if total_area_ft < 100:
