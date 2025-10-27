@@ -43,6 +43,7 @@ class SolveRequest:
     board_width_cells: int
     board_height_cells: int
     allow_rotation: bool
+    allow_pop_outs: bool
 
 
 @dataclass
