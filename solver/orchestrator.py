@@ -233,19 +233,12 @@ class TileSolverOrchestrator:
             raise ValueError(
                 "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
             )
-        candidates: List[Tuple[int, int]] = []
-        limit = int(math.isqrt(area_cells))
-        for width in range(1, limit + 1):
-            if area_cells % width != 0:
-                continue
-            height = area_cells // width
-            candidates.append((width, height))
-            if width != height:
-                candidates.append((height, width))
-        if not candidates:
-            candidates.append((area_cells, 1))
-        candidates.sort(key=lambda dims: abs(dims[0] - dims[1]))
-        return candidates
+        side_length = int(round(math.sqrt(area_cells)))
+        if side_length * side_length != area_cells:
+            raise ValueError(
+                "Total tile coverage must produce a square board. Adjust tile quantities to form a square grid."
+            )
+        return [(side_length, side_length)]
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]
