@@ -59,6 +59,7 @@ class TileSolverOrchestrator:
                     "time_limit_sec": phase.time_limit_sec,
                     "allow_rotation": phase.allow_rotation,
                     "allow_discards": phase.allow_discards,
+                    "allow_pop_outs": phase.allow_pop_outs,
                 }
                 for phase in phases
             ],
@@ -82,6 +83,7 @@ class TileSolverOrchestrator:
                 time_limit_sec=phase.time_limit_sec,
                 allow_rotation=phase.allow_rotation,
                 allow_discards=phase.allow_discards,
+                allow_pop_outs=phase.allow_pop_outs,
                 phase_index=phase_index,
                 phase_count=len(phases),
                 overall_elapsed=time.time() - overall_start,
@@ -95,7 +97,13 @@ class TileSolverOrchestrator:
                         break
                 else:
                     remaining_time = None
-                request = SolveRequest(tile_quantities, board_w, board_h, allow_rotation=phase.allow_rotation)
+                request = SolveRequest(
+                    tile_quantities,
+                    board_w,
+                    board_h,
+                    allow_rotation=phase.allow_rotation,
+                    allow_pop_outs=phase.allow_pop_outs,
+                )
                 options = SolverOptions(
                     max_edge_cells=int(SETTINGS.MAX_EDGE_FT / self.unit_ft),
                     same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,

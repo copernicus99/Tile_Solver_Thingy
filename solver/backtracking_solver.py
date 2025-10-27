@@ -33,6 +33,7 @@ class BacktrackingSolver:
         self.phase_name = phase_name
         self.width = request.board_width_cells
         self.height = request.board_height_cells
+        self.allow_pop_outs = request.allow_pop_outs
         self.grid: List[List[int]] = [[-1 for _ in range(self.width)] for _ in range(self.height)]
         self.tiles: List[TileInstance] = []
         self.placements: Dict[int, Placement] = {}
