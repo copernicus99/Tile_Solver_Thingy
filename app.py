@@ -39,6 +39,147 @@ PHASE_CONFIGS = {
     )
 }
 
+class RunLogWriter:
+    def __init__(self, path: Path):
+        self.path = path
+        self._lock = threading.Lock()
+        self._summary_written = False
+        SETTINGS.LOG_DIR.mkdir(parents=True, exist_ok=True)
+        header = [
+            "TILE SOLVER RUN LOG",
+            f"MAX_EDGE_FT={SETTINGS.MAX_EDGE_FT}",
+            f"PLUS_TOGGLE={SETTINGS.PLUS_TOGGLE}",
+            f"SAME_SHAPE_LIMIT={SETTINGS.SAME_SHAPE_LIMIT}",
+            "",
+            "Events:",
+        ]
+        with self._lock:
+            with self.path.open("w", encoding="utf-8") as fh:
+                for line in header:
+                    fh.write(f"{line}\n")
+
+    def handle_event(self, event: Dict[str, object]) -> None:
+        event_type = event.get("type")
+        lines: List[str] = []
+        if event_type == "run_started":
+            lines.append("Run started.")
+            phases = event.get("phases") or []
+            for idx, phase in enumerate(phases, start=1):
+                limit = phase.get("time_limit_sec")
+                limit_text = f"{limit:.2f}s" if isinstance(limit, (int, float)) else "no limit"
+                lines.append(
+                    "  Phase {idx}: {name} (time limit: {limit}, rotation: {rotation}, discards: {discards}, pop-outs: {pop_outs})".format(
+                        idx=idx,
+                        name=phase.get("name", "unknown"),
+                        limit=limit_text,
+                        rotation="yes" if phase.get("allow_rotation") else "no",
+                        discards="yes" if phase.get("allow_discards") else "no",
+                        pop_outs="yes" if phase.get("allow_pop_outs") else "no",
+                    )
+                )
+            total = event.get("total_allotment")
+            if isinstance(total, (int, float)):
+                lines.append(f"  Total allotted time: {total:.2f}s")
+        elif event_type == "phase_started":
+            phase = event.get("phase")
+            limit = event.get("time_limit_sec")
+            limit_text = f"{limit:.2f}s" if isinstance(limit, (int, float)) else "no limit"
+            index = event.get("phase_index")
+            if isinstance(index, int):
+                lines.append(f"Phase {index + 1} ({phase}) started. Time limit: {limit_text}.")
+            else:
+                lines.append(f"Phase {phase} started. Time limit: {limit_text}.")
+        elif event_type == "attempt_started":
+            idx = event.get("attempt_index")
+            board = event.get("board_size_ft") or (None, None)
+            lines.append(
+                "Attempt {idx} started on board {w:.2f}ft x {h:.2f}ft.".format(
+                    idx=idx,
+                    w=(board[0] or 0.0),
+                    h=(board[1] or 0.0),
+                )
+            )
+        elif event_type == "attempt_completed":
+            idx = event.get("attempt_index")
+            elapsed = event.get("elapsed")
+            elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
+            success = "yes" if event.get("success") else "no"
+            backtracks = event.get("backtracks")
+            lines.append(
+                "Attempt {idx} completed in {elapsed} (success: {success}, backtracks: {backtracks}).".format(
+                    idx=idx,
+                    elapsed=elapsed_text,
+                    success=success,
+                    backtracks=backtracks if backtracks is not None else "unknown",
+                )
+            )
+        elif event_type == "phase_completed":
+            phase = event.get("phase")
+            elapsed = event.get("total_elapsed")
+            elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
+            success = "yes" if event.get("success") else "no"
+            lines.append(f"Phase {phase} completed in {elapsed_text} (success: {success}).")
+        elif event_type == "run_completed":
+            elapsed = event.get("overall_elapsed")
+            elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
+            success = "yes" if event.get("success") else "no"
+            lines.append(f"Run completed in {elapsed_text} (success: {success}).")
+        elif event_type == "error":
+            message = event.get("message")
+            if message:
+                lines.append(f"Error: {message}")
+
+        if lines:
+            self._append_lines(lines)
+
+    def log_error(self, message: str) -> None:
+        self._append_lines([f"Error: {message}"])
+
+    def append_summary(
+        self,
+        logs: List[PhaseLog],
+        result: Optional[SolveResult],
+        error: Optional[str] = None,
+    ) -> None:
+        if self._summary_written:
+            return
+        lines: List[str] = ["", "Summary:"]
+        for phase_log in logs:
+            lines.append(f"{phase_log.phase_name}")
+            lines.append(f"  Total elapsed: {phase_log.total_elapsed:.2f}s")
+            if not phase_log.attempts:
+                lines.append("  No board attempts")
+            for attempt in phase_log.attempts:
+                width_ft, height_ft = attempt.board_size_ft
+                lines.append(
+                    "  Board {w:.2f}ft x {h:.2f}ft | elapsed={elapsed:.2f}s | backtracks={backtracks} | success={success}".format(
+                        w=width_ft,
+                        h=height_ft,
+                        elapsed=attempt.elapsed,
+                        backtracks=attempt.backtracks,
+                        success="yes" if attempt.success else "no",
+                    )
+                )
+            if phase_log.result:
+                lines.append("  Result achieved")
+            lines.append("")
+        if error:
+            lines.append(f"Run ended with error: {error}")
+        elif result:
+            lines.append("Run ended with a successful solution.")
+        else:
+            lines.append("Run completed without a solution.")
+        self._append_lines(lines)
+        self._summary_written = True
+
+    def _append_lines(self, lines: List[str]) -> None:
+        if not lines:
+            return
+        with self._lock:
+            with self.path.open("a", encoding="utf-8") as fh:
+                for line in lines:
+                    fh.write(f"{line}\n")
+
 
 @dataclass
 class RunState:
@@ -50,6 +191,8 @@ class RunState:
     thread: Optional[threading.Thread] = None
     created_at: float = field(default_factory=time.time)
     selection: Dict[str, int] = field(default_factory=dict)
+    log_path: Optional[Path] = None
+    log_writer: Optional[RunLogWriter] = None
 
 
 class RunManager:
@@ -59,7 +202,14 @@ class RunManager:
 
     def start_run(self, selection: Dict[str, int]) -> str:
         run_id = uuid.uuid4().hex
-        state = RunState(queue.Queue(), selection=dict(selection))
+        log_path = SETTINGS.LOG_DIR / "run_log.txt"
+        log_writer = RunLogWriter(log_path)
+        state = RunState(
+            queue.Queue(),
+            selection=dict(selection),
+            log_path=log_path,
+            log_writer=log_writer,
+        )
         with self._lock:
             self._runs[run_id] = state
         thread = threading.Thread(
@@ -80,18 +230,28 @@ class RunManager:
         if state is None:
             return
 
+        log_writer = state.log_writer
+
         def progress(event: Dict[str, object]) -> None:
             event.setdefault("run_id", run_id)
             state.queue.put(event)
+            if log_writer:
+                log_writer.handle_event(event)
 
+        logs: List[PhaseLog] = []
         try:
             result, logs = orchestrator.solve(selection, progress_callback=progress)
             state.result = result
             state.logs = logs
         except ValueError as exc:
             state.error = str(exc)
+            if log_writer:
+                log_writer.log_error(state.error)
             state.queue.put({"type": "error", "message": state.error, "run_id": run_id})
         finally:
+            if log_writer:
+                final_logs = state.logs if state.logs is not None else logs
+                log_writer.append_summary(final_logs or [], state.result, state.error)
             state.done = True
             state.queue.put(
                 {
@@ -119,20 +279,30 @@ def index():
 def solve_tiles():
     selection = _parse_selection(request.form)
     selection_summary = _selection_summary(selection)
+    log_path = SETTINGS.LOG_DIR / "run_log.txt"
+    log_writer = RunLogWriter(log_path)
+
+    def progress(event: Dict[str, object]) -> None:
+        log_writer.handle_event(event)
+
     try:
-        result, logs = orchestrator.solve(selection)
+        result, logs = orchestrator.solve(selection, progress_callback=progress)
     except ValueError as exc:
+        message = str(exc)
+        log_writer.log_error(message)
+        log_writer.append_summary([], None, message)
         return render_template(
             "results_form.html",
             result=None,
             logs=[],
-            error=str(exc),
-            outputs={},
+            error=message,
+            outputs={"run_log": log_writer.path.name},
             config=SETTINGS,
             selection_summary=selection_summary,
             phase_limits=_phase_limits(),
         )
-    outputs = _write_outputs(result, logs) if result else {}
+    log_writer.append_summary(logs, result, None)
+    outputs = _write_outputs(result, logs, log_writer.path)
     return render_template(
         "results_form.html",
         result=result,
@@ -181,18 +351,22 @@ def run_result(run_id: str):
         return "", 202
     logs = state.logs or []
     selection_summary = _selection_summary(state.selection)
+    log_path = state.log_path
     if state.error:
+        outputs: Dict[str, str] = {}
+        if log_path:
+            outputs["run_log"] = log_path.name
         return render_template(
             "results_form.html",
             result=None,
             logs=logs,
             error=state.error,
-            outputs={},
+            outputs=outputs,
             config=SETTINGS,
             selection_summary=selection_summary,
             phase_limits=_phase_limits(),
         )
-    outputs = _write_outputs(state.result, logs) if state.result else {}
+    outputs = _write_outputs(state.result, logs, log_path)
     return render_template(
         "results_form.html",
         result=state.result,
@@ -268,7 +442,11 @@ def inject_helpers():
     return {"format_seconds": _format_seconds}
 
 
-def _write_outputs(result: SolveResult | None, logs: List[PhaseLog]):
+def _write_outputs(
+    result: SolveResult | None,
+    logs: List[PhaseLog],
+    log_path: Optional[Path] = None,
+):
     SETTINGS.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS.LOG_DIR.mkdir(parents=True, exist_ok=True)
     outputs = {}
@@ -279,8 +457,9 @@ def _write_outputs(result: SolveResult | None, logs: List[PhaseLog]):
         _write_layout(layout_path, result)
         outputs["coords"] = coords_path.name
         outputs["layout"] = layout_path.name
-    log_path = SETTINGS.LOG_DIR / "run_log.txt"
-    _write_log(log_path, logs)
+    if log_path is None:
+        log_path = SETTINGS.LOG_DIR / "run_log.txt"
+        _write_log(log_path, logs)
     outputs["run_log"] = log_path.name
     return outputs
 
