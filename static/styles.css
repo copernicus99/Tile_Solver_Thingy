@@ -1,0 +1,175 @@
+:root {
+    --bg: #0b0e11;
+    --fg: #f5f7fa;
+    --accent: #4ecdc4;
+    --accent-dark: #1a535c;
+    --surface: #162029;
+    --surface-alt: #1f2d3a;
+    --danger: #ff6b6b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: radial-gradient(circle at top, rgba(78, 205, 196, 0.15), transparent 55%), var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+}
+
+main {
+    width: min(900px, 90vw);
+    margin: 0 auto;
+    padding: 3rem 0 5rem;
+}
+
+h1 {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    letter-spacing: 0.02em;
+}
+
+p.subtitle {
+    margin-top: 0;
+    color: rgba(245, 247, 250, 0.7);
+}
+
+form {
+    background: linear-gradient(160deg, var(--surface), var(--surface-alt));
+    border-radius: 18px;
+    padding: 2.5rem;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+    position: relative;
+}
+
+.tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.25rem;
+    margin: 2rem 0;
+}
+
+.tile-card {
+    background: rgba(26, 83, 92, 0.28);
+    border-radius: 14px;
+    padding: 1rem;
+    border: 1px solid rgba(78, 205, 196, 0.2);
+    transition: transform 0.2s ease, border 0.2s ease;
+}
+
+.tile-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(78, 205, 196, 0.45);
+}
+
+.tile-card label {
+    display: block;
+    font-size: 1.05rem;
+    margin-bottom: 0.75rem;
+}
+
+.tile-card select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    border: none;
+    background: rgba(15, 32, 39, 0.7);
+    color: var(--fg);
+    font-size: 1rem;
+    outline: none;
+}
+
+button[type="submit"] {
+    background: linear-gradient(135deg, var(--accent), #65e2d9);
+    color: var(--bg);
+    border: none;
+    padding: 0.9rem 2.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 20px 40px rgba(78, 205, 196, 0.25);
+}
+
+button[type="submit"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 26px 45px rgba(78, 205, 196, 0.35);
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 14, 17, 0.82);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.overlay.active {
+    display: flex;
+}
+
+.overlay .panel {
+    text-align: center;
+    padding: 2rem 3rem;
+    border-radius: 16px;
+    background: rgba(31, 45, 58, 0.9);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45);
+}
+
+.overlay .spinner {
+    width: 56px;
+    height: 56px;
+    border: 5px solid rgba(78, 205, 196, 0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    margin: 0 auto 1.5rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.results-container {
+    background: linear-gradient(160deg, var(--surface), var(--surface-alt));
+    border-radius: 18px;
+    padding: 2.5rem;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+    margin-top: 2rem;
+}
+
+.results-container h2 {
+    margin-top: 0;
+}
+
+.results-container ul {
+    list-style: none;
+    padding: 0;
+}
+
+.results-container li + li {
+    margin-top: 0.35rem;
+}
+
+a.download-link {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a.download-link:hover {
+    text-decoration: underline;
+}
+
+.error-message {
+    color: var(--danger);
+    font-weight: 600;
+    margin-top: 1rem;
+}

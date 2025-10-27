@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Tile Solver Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Tile Layout Solver</h1>
+            <p class="subtitle">Review the solver outcome and generated assets.</p>
+        </header>
+        {% if error %}
+        <div class="results-container">
+            <h2>Solver Result</h2>
+            <p class="error-message">{{ error }}</p>
+            <p><a class="download-link" href="{{ url_for('index') }}">Back to selection</a></p>
+        </div>
+        {% else %}
+        <div class="results-container">
+            <h2>Optimum Layout</h2>
+            <p>Phase: <strong>{{ result.phase_name }}</strong></p>
+            <p>Board Size: {{ '%.2f'|format(result.board_width_ft) }} ft × {{ '%.2f'|format(result.board_height_ft) }} ft</p>
+            <h3>Tile Placements</h3>
+            <ul>
+                {% for placement in result.placements %}
+                <li>
+                    {{ placement.tile.identifier }} — top-left ({{ '%.2f'|format(placement.to_top_left_ft(config.GRID_UNIT_FT)[0]) }} ft,
+                    {{ '%.2f'|format(placement.to_top_left_ft(config.GRID_UNIT_FT)[1]) }} ft), size {{ '%.2f'|format(placement.width * config.GRID_UNIT_FT) }} ft ×
+                    {{ '%.2f'|format(placement.height * config.GRID_UNIT_FT) }} ft
+                </li>
+                {% endfor %}
+            </ul>
+            <h3>Downloads</h3>
+            <ul>
+                {% if outputs.get('coords') %}<li><a class="download-link" href="{{ url_for('serve_output', filename=outputs.get('coords')) }}" download>Tile coordinates (coords.txt)</a></li>{% endif %}
+                {% if outputs.get('layout') %}<li><a class="download-link" href="{{ url_for('serve_output', filename=outputs.get('layout')) }}" target="_blank">Layout preview (layout.html)</a></li>{% endif %}
+                {% if outputs.get('run_log') %}<li><a class="download-link" href="{{ url_for('serve_log', filename=outputs.get('run_log')) }}">Run log</a></li>{% endif %}
+            </ul>
+        </div>
+        {% endif %}
+        <div class="results-container">
+            <h2>Phase Summary</h2>
+            {% if logs %}
+            <ul>
+                {% for entry in logs %}
+                <li>
+                    <strong>{{ entry.phase_name }}</strong> — {{ '%.2f'|format(entry.total_elapsed) }}s total
+                    <ul>
+                        {% for attempt in entry.attempts %}
+                        <li>
+                            Board {{ '%.2f'|format(attempt.board_size_ft[0]) }} ft × {{ '%.2f'|format(attempt.board_size_ft[1]) }} ft — {{ '%.2f'|format(attempt.elapsed) }}s,
+                            backtracks {{ attempt.backtracks }}, success {{ 'yes' if attempt.success else 'no' }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No phases executed.</p>
+            {% endif %}
+        </div>
+        <p style="text-align:center; margin-top:2rem;"><a class="download-link" href="{{ url_for('index') }}">Run another configuration</a></p>
+    </main>
+</body>
+</html>
