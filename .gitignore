@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 outputs/
 logs/
+static/run_log.txt
 instance/
 .env
 *.log

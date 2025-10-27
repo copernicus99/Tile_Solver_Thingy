@@ -22,7 +22,7 @@ Open http://localhost:5000 to access the tile selection form. After submitting y
 
 - `outputs/coords.txt` – coordinates for each tile's top-left corner.
 - `outputs/layout.html` – a visual rendering of the layout.
-- `logs/run_log.txt` – detailed log of each solver phase and board attempt.
+- `static/run_log.txt` – detailed log of each solver phase and board attempt.
 
 ## Project Structure
 
