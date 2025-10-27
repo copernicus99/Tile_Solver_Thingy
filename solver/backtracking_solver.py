@@ -29,6 +29,8 @@ class BacktrackingSolver:
         self.stats = SolverStats()
         self._start_time = 0.0
         self._tile_shapes: Dict[int, TileType] = {}
+        self._width_cache: Dict[Tuple[frozenset[int], int], bool] = {}
+        self._height_cache: Dict[Tuple[frozenset[int], int], bool] = {}
         self._build_tiles()
 
     def _build_tiles(self) -> None:
@@ -72,25 +74,163 @@ class BacktrackingSolver:
     def _search(self) -> bool:
         if not self._time_remaining():
             return False
-        next_cell = self._find_next_empty()
-        if next_cell is None:
+        selection = self._select_cell_with_candidates()
+        if selection is None:
             if self._validate_completed_layout():
                 return True
             self.stats.backtracks += 1
             return False
+        x, y, candidates = selection
+        if not candidates:
+            self.stats.backtracks += 1
+            return False
+        for tile_idx, width, height in candidates:
+            if self._used[tile_idx]:
+                continue
+            tile = self.tiles[tile_idx]
+            placement = Placement(tile, x, y, width, height)
+            self._apply(tile_idx, placement)
+            if not self._creates_unfillable_gap() and self._search():
+                return True
+            self._remove(tile_idx, placement)
+        self.stats.backtracks += 1
+        return False
+
+    def _select_cell_with_candidates(self) -> Optional[Tuple[int, int, List[Tuple[int, int, int]]]]:
+        next_cell = self._find_next_empty()
+        if next_cell is None:
+            return None
         x, y = next_cell
+        candidates: List[Tuple[int, int, int]] = []
+        seen_types: set[TileType] = set()
         for tile_idx in self._tile_order:
             if self._used[tile_idx]:
                 continue
             tile = self.tiles[tile_idx]
+            if tile.type in seen_types:
+                continue
+            seen_types.add(tile.type)
             for width, height in self._orientations(tile):
                 if self._can_place(tile_idx, x, y, width, height):
-                    placement = Placement(tile, x, y, width, height)
-                    self._apply(tile_idx, placement)
-                    if self._search():
+                    candidates.append((tile_idx, width, height))
+        return x, y, candidates
+
+    def _available_metrics(self) -> Tuple[int, int, int, frozenset[int], frozenset[int]]:
+        min_width: Optional[int] = None
+        min_height: Optional[int] = None
+        min_area: Optional[int] = None
+        width_options: set[int] = set()
+        height_options: set[int] = set()
+        seen_types: set[TileType] = set()
+        for tile_idx in self._tile_order:
+            if self._used[tile_idx]:
+                continue
+            tile = self.tiles[tile_idx]
+            if tile.type in seen_types:
+                continue
+            seen_types.add(tile.type)
+            for width, height in self._orientations(tile):
+                if min_width is None or width < min_width:
+                    min_width = width
+                if min_height is None or height < min_height:
+                    min_height = height
+                width_options.add(width)
+                height_options.add(height)
+                area = width * height
+                if min_area is None or area < min_area:
+                    min_area = area
+        return (
+            (min_width or 0),
+            (min_height or 0),
+            (min_area or 0),
+            frozenset(width_options),
+            frozenset(height_options),
+        )
+
+    def _length_fillable(
+        self,
+        length: int,
+        options: frozenset[int],
+        cache: Dict[Tuple[frozenset[int], int], bool],
+    ) -> bool:
+        if length == 0:
+            return True
+        if not options:
+            return False
+        key = (options, length)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        reachable = [False] * (length + 1)
+        reachable[0] = True
+        dims = sorted(options)
+        for dim in dims:
+            for value in range(dim, length + 1):
+                if reachable[value - dim]:
+                    reachable[value] = True
+        cache[key] = reachable[length]
+        return reachable[length]
+
+    def _segment_fillable(
+        self,
+        run: int,
+        min_dim: int,
+        options: frozenset[int],
+        cache: Dict[Tuple[frozenset[int], int], bool],
+    ) -> bool:
+        if run == 0:
+            return True
+        if not options:
+            return False
+        if min_dim > 0 and run < min_dim:
+            return False
+        return self._length_fillable(run, options, cache)
+
+    def _creates_unfillable_gap(self) -> bool:
+        min_width, min_height, min_area, width_options, height_options = self._available_metrics()
+        if width_options:
+            for y in range(self.height):
+                run = 0
+                for x in range(self.width):
+                    if self.grid[y][x] == -1:
+                        run += 1
+                    else:
+                        if not self._segment_fillable(run, min_width, width_options, self._width_cache):
+                            return True
+                        run = 0
+                if not self._segment_fillable(run, min_width, width_options, self._width_cache):
+                    return True
+        if height_options:
+            for x in range(self.width):
+                run = 0
+                for y in range(self.height):
+                    if self.grid[y][x] == -1:
+                        run += 1
+                    else:
+                        if not self._segment_fillable(run, min_height, height_options, self._height_cache):
+                            return True
+                        run = 0
+                if not self._segment_fillable(run, min_height, height_options, self._height_cache):
+                    return True
+        if min_area > 1:
+            visited = [[False for _ in range(self.width)] for _ in range(self.height)]
+            for y in range(self.height):
+                for x in range(self.width):
+                    if self.grid[y][x] != -1 or visited[y][x]:
+                        continue
+                    stack = [(x, y)]
+                    visited[y][x] = True
+                    area = 0
+                    while stack:
+                        cx, cy = stack.pop()
+                        area += 1
+                        for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
+                            if 0 <= nx < self.width and 0 <= ny < self.height:
+                                if not visited[ny][nx] and self.grid[ny][nx] == -1:
+                                    visited[ny][nx] = True
+                                    stack.append((nx, ny))
+                    if area < min_area:
                         return True
-                    self._remove(tile_idx, placement)
-        self.stats.backtracks += 1
         return False
 
     def _find_next_empty(self) -> Optional[Tuple[int, int]]:
