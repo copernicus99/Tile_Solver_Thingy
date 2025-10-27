@@ -31,8 +31,8 @@ class Settings:
 
     PHASE_A = PhaseConfig("Phase A", allow_rotation=False, allow_discards=False, time_limit_sec=600)
     PHASE_B = PhaseConfig("Phase B", allow_rotation=True, allow_discards=False, time_limit_sec=600)
-    PHASE_C = PhaseConfig("Phase C", allow_rotation=False, allow_discards=False, time_limit_sec=300)
-    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=300)
+    PHASE_C = PhaseConfig("Phase C", allow_rotation=False, allow_discards=False, time_limit_sec=600)
+    PHASE_D = PhaseConfig("Phase D", allow_rotation=True, allow_discards=False, time_limit_sec=600)
 
     OUTPUT_DIR = Path("outputs")
     LOG_DIR = Path("logs")
