@@ -46,16 +46,32 @@
                     <span>Overall</span>
                     <span id="overall-progress-label">0%</span>
                 </div>
-                <div class="progress-bar">
-                    <div id="overall-progress" style="width:0%;"></div>
-                </div>
+                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="overall-progress-label overall-progress-title">
+                    <title id="overall-progress-title">Overall solver progress</title>
+                    <defs>
+                        <linearGradient id="overall-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#4ecdc4"></stop>
+                            <stop offset="100%" stop-color="#65e2d9"></stop>
+                        </linearGradient>
+                    </defs>
+                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                    <rect class="progress-fill" id="overall-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#overall-progress-gradient)" style="--progress:0;"></rect>
+                </svg>
                 <div class="progress-row">
                     <span>Phase</span>
                     <span id="phase-progress-label">0%</span>
                 </div>
-                <div class="progress-bar">
-                    <div id="phase-progress" style="width:0%;"></div>
-                </div>
+                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="phase-progress-label phase-progress-title">
+                    <title id="phase-progress-title">Current phase progress</title>
+                    <defs>
+                        <linearGradient id="phase-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#4ecdc4"></stop>
+                            <stop offset="100%" stop-color="#65e2d9"></stop>
+                        </linearGradient>
+                    </defs>
+                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                    <rect class="progress-fill" id="phase-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#phase-progress-gradient)" style="--progress:0;"></rect>
+                </svg>
             </div>
             <div class="overlay-footer">
                 <button type="button" id="overlay-hide" class="link-button" hidden>Hide</button>
@@ -121,9 +137,15 @@
         }
 
         function updateProgress(bar, label, value) {
+            if (!bar) {
+                return;
+            }
             const clamped = Math.max(0, Math.min(100, value));
-            bar.style.width = `${clamped}%`;
-            label.textContent = `${clamped.toFixed(1)}%`;
+            bar.style.setProperty('--progress', (clamped / 100).toFixed(4));
+            bar.setAttribute('data-progress', clamped.toFixed(1));
+            if (label) {
+                label.textContent = `${clamped.toFixed(1)}%`;
+            }
         }
 
         function formatSeconds(seconds) {
@@ -214,8 +236,8 @@
                 case 'error':
                     statusText.textContent = 'Unable to start solver';
                     overlaySubtitle.textContent = data.message || 'An unexpected error occurred.';
-                    overallProgressBar.style.width = '0%';
-                    phaseProgressBar.style.width = '0%';
+                    updateProgress(overallProgressBar, overallProgressLabel, 0);
+                    updateProgress(phaseProgressBar, phaseProgressLabel, 0);
                     break;
                 case 'finished':
                     closeEventSource();
