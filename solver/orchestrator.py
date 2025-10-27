@@ -233,11 +233,9 @@ class TileSolverOrchestrator:
             raise ValueError(
                 "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
             )
-        side_length = int(round(math.sqrt(area_cells)))
-        if side_length * side_length != area_cells:
-            raise ValueError(
-                "Total tile coverage must produce a square board. Adjust tile quantities to form a square grid."
-            )
+        side_length = int(math.isqrt(area_cells))
+        if side_length == 0:
+            return []
         return [(side_length, side_length)]
 
 
