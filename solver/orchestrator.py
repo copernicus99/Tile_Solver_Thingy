@@ -289,7 +289,10 @@ class TileSolverOrchestrator:
             share = remainder_share / additional_slots if additional_slots else 0.0
         else:
             share = 0.0
-        attempt_cap = phase_limit * share
+        if share <= 0.0:
+            attempt_cap = remaining_time
+        else:
+            attempt_cap = phase_limit * share
         limit = min(remaining_time, attempt_cap)
         return max(0.0, limit)
 
