@@ -198,12 +198,19 @@ class TileSolverOrchestrator:
             raise ValueError(
                 "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
             )
-        side = math.isqrt(area_cells)
-        if side * side != area_cells:
-            raise ValueError(
-                "Tile selection requires a square layout. Adjust tile quantities so the total area forms a square."
-            )
-        return [(side, side)]
+        candidates: List[Tuple[int, int]] = []
+        limit = int(math.isqrt(area_cells))
+        for width in range(1, limit + 1):
+            if area_cells % width != 0:
+                continue
+            height = area_cells // width
+            candidates.append((width, height))
+            if width != height:
+                candidates.append((height, width))
+        if not candidates:
+            candidates.append((area_cells, 1))
+        candidates.sort(key=lambda dims: abs(dims[0] - dims[1]))
+        return candidates
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]
