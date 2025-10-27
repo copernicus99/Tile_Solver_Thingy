@@ -1,0 +1,30 @@
+TILE SOLVER RUN LOG
+MAX_EDGE_FT=6.0
+PLUS_TOGGLE=True
+SAME_SHAPE_LIMIT=1
+
+Events:
+Run started.
+  Phase 1: Phase C (time limit: 600.00s, rotation: yes, discards: no, pop-outs: no)
+  Phase 2: Phase D (time limit: 600.00s, rotation: yes, discards: yes, pop-outs: yes)
+  Total allotted time: 1200.00s
+Phase 1 (Phase C) started. Time limit: 600.00s.
+Attempt 1 started on board 12.00ft x 12.00ft.
+Attempt 1 completed in 600.11s (success: no, backtracks: 387662).
+Phase Phase C completed in 600.11s (success: no).
+Phase 2 (Phase D) started. Time limit: 600.00s.
+Attempt 1 started on board 12.00ft x 12.00ft.
+Attempt 1 completed in 600.11s (success: no, backtracks: 462136).
+Phase Phase D completed in 600.11s (success: no).
+Run completed in 1200.23s (success: no).
+
+Summary:
+Phase C
+  Total elapsed: 600.11s
+  Board 12.00ft x 12.00ft | elapsed=600.11s | backtracks=387662 | success=no
+
+Phase D
+  Total elapsed: 600.11s
+  Board 12.00ft x 12.00ft | elapsed=600.11s | backtracks=462136 | success=no
+
+Run completed without a solution.
