@@ -115,7 +115,11 @@ class TileSolverOrchestrator:
                     allow_pop_outs=phase.allow_pop_outs,
                 )
                 options = SolverOptions(
-                    max_edge_cells=int(SETTINGS.MAX_EDGE_FT / self.unit_ft),
+                    max_edge_cells_horizontal=self._max_edge_for_dimension(board_w),
+                    max_edge_cells_vertical=self._max_edge_for_dimension(board_h),
+                    max_edge_include_perimeter=not getattr(
+                        SETTINGS, "MAX_EDGE_INSIDE_ONLY", True
+                    ),
                     same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,
                     enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
                     time_limit_sec=attempt_limit,
@@ -288,6 +292,15 @@ class TileSolverOrchestrator:
         attempt_cap = phase_limit * share
         limit = min(remaining_time, attempt_cap)
         return max(0.0, limit)
+
+    def _max_edge_for_dimension(self, length_cells: int) -> int:
+        ratio = getattr(SETTINGS, "MAX_EDGE_RATIO", None)
+        if ratio is not None and ratio > 0:
+            limit = math.floor(length_cells * ratio)
+            return max(1, limit)
+        absolute_ft = getattr(SETTINGS, "MAX_EDGE_FT", 0.0)
+        limit_cells = int(absolute_ft / self.unit_ft) if absolute_ft > 0 else 0
+        return max(0, limit_cells)
 
     def _select_phases(self, total_area_ft: float):
         if total_area_ft < 100:

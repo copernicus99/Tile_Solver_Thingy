@@ -34,7 +34,13 @@ class Settings:
     }
 
     GRID_UNIT_FT = 0.5
+    # Maximum allowable straight edge expressed as a fraction of the board side.
+    # With the default GRID_UNIT_FT of 0.5, a 10 ft board (20 cells) and the
+    # default ratio of 0.6 results in a 6 ft (12 cell) limit, matching the
+    # previous fixed behaviour.
+    MAX_EDGE_RATIO = 0.6
     MAX_EDGE_FT = 6.0
+    MAX_EDGE_INSIDE_ONLY = True
     PLUS_TOGGLE = True
     SAME_SHAPE_LIMIT = 1
 
