@@ -5,11 +5,18 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class PhaseConfig:
+    """Configuration values that control solver behaviour for a phase.
+
+    Attributes:
+        first_board_time_share: Fraction of the phase's time limit allotted to
+            the first board attempt. Expected range: 0.0–1.0.
+    """
     name: str
     allow_rotation: bool
     allow_discards: bool
     allow_pop_outs: bool
     time_limit_sec: Optional[float]
+    first_board_time_share: float
 
 
 class Settings:
@@ -37,6 +44,7 @@ class Settings:
         allow_discards=False,
         allow_pop_outs=False,
         time_limit_sec=600.0,
+        first_board_time_share=1.0,
     )
     PHASE_B = PhaseConfig(
         "Phase B",
@@ -44,6 +52,7 @@ class Settings:
         allow_discards=True,
         allow_pop_outs=True,
         time_limit_sec=600.0,
+        first_board_time_share=1.0,
     )
     PHASE_C = PhaseConfig(
         "Phase C",
@@ -51,6 +60,7 @@ class Settings:
         allow_discards=False,
         allow_pop_outs=False,
         time_limit_sec=600.0,
+        first_board_time_share=1.0,
     )
     PHASE_D = PhaseConfig(
         "Phase D",
@@ -58,6 +68,7 @@ class Settings:
         allow_discards=True,
         allow_pop_outs=True,
         time_limit_sec=600.0,
+        first_board_time_share=1.0,
     )
 
     OUTPUT_DIR = Path("outputs")
