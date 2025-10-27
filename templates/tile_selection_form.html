@@ -6,11 +6,61 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="overlay" id="run-overlay">
-        <div class="panel">
-            <div class="spinner"></div>
-            <h2>Running tile solver...</h2>
-            <p>Please wait while we search for the optimum layout.</p>
+    <div class="overlay" id="run-overlay" aria-hidden="true">
+        <div class="panel" role="dialog" aria-live="polite">
+            <div class="overlay-header">
+                <div class="spinner" id="overlay-spinner"></div>
+                <div>
+                    <h2 id="overlay-title">Running tile solver...</h2>
+                    <p id="overlay-subtitle">Preparing phases and estimating time requirements.</p>
+                </div>
+            </div>
+            <dl class="overlay-stats">
+                <div>
+                    <dt>Status</dt>
+                    <dd id="stat-status">Initializing…</dd>
+                </div>
+                <div>
+                    <dt>Phase</dt>
+                    <dd id="stat-phase">—</dd>
+                </div>
+                <div>
+                    <dt>Phase Allotment</dt>
+                    <dd id="stat-phase-allotment">—</dd>
+                </div>
+                <div>
+                    <dt>Attempt</dt>
+                    <dd id="stat-attempt">—</dd>
+                </div>
+                <div>
+                    <dt>Grid</dt>
+                    <dd id="stat-grid">—</dd>
+                </div>
+                <div>
+                    <dt>Elapsed Time</dt>
+                    <dd id="stat-elapsed">0s</dd>
+                </div>
+            </dl>
+            <div class="progress-section">
+                <div class="progress-row">
+                    <span>Overall</span>
+                    <span id="overall-progress-label">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="overall-progress" style="width:0%;"></div>
+                </div>
+                <div class="progress-row">
+                    <span>Phase</span>
+                    <span id="phase-progress-label">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="phase-progress" style="width:0%;"></div>
+                </div>
+            </div>
+            <div class="overlay-footer">
+                <button type="button" id="overlay-hide" class="link-button" hidden>Hide</button>
+                <button type="button" id="overlay-abort" class="link-button" disabled>Abort</button>
+            </div>
         </div>
     </div>
     <main>
@@ -39,8 +89,186 @@
     <script>
         const form = document.getElementById('tile-form');
         const overlay = document.getElementById('run-overlay');
-        form.addEventListener('submit', () => {
+        const statusText = document.getElementById('stat-status');
+        const phaseText = document.getElementById('stat-phase');
+        const phaseAllotmentText = document.getElementById('stat-phase-allotment');
+        const attemptText = document.getElementById('stat-attempt');
+        const gridText = document.getElementById('stat-grid');
+        const elapsedText = document.getElementById('stat-elapsed');
+        const overallProgressBar = document.getElementById('overall-progress');
+        const phaseProgressBar = document.getElementById('phase-progress');
+        const overallProgressLabel = document.getElementById('overall-progress-label');
+        const phaseProgressLabel = document.getElementById('phase-progress-label');
+        const overlaySubtitle = document.getElementById('overlay-subtitle');
+        const overlayTitle = document.getElementById('overlay-title');
+
+        let currentEventSource = null;
+        let currentRunId = null;
+        function resetOverlay() {
+            statusText.textContent = 'Initializing…';
+            phaseText.textContent = '—';
+            phaseAllotmentText.textContent = '—';
+            attemptText.textContent = '—';
+            gridText.textContent = '—';
+            elapsedText.textContent = '0s';
+            updateProgress(overallProgressBar, overallProgressLabel, 0);
+            updateProgress(phaseProgressBar, phaseProgressLabel, 0);
+            overlaySubtitle.textContent = 'Preparing phases and estimating time requirements.';
+            overlayTitle.textContent = 'Running tile solver...';
+            overlay.classList.remove('error');
+            overlay.setAttribute('aria-hidden', 'false');
             overlay.classList.add('active');
+        }
+
+        function updateProgress(bar, label, value) {
+            const clamped = Math.max(0, Math.min(100, value));
+            bar.style.width = `${clamped}%`;
+            label.textContent = `${clamped.toFixed(1)}%`;
+        }
+
+        function formatSeconds(seconds) {
+            if (!seconds || seconds < 0) {
+                return '0s';
+            }
+            const rounded = Math.round(seconds);
+            const minutes = Math.floor(rounded / 60);
+            const secs = rounded % 60;
+            if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            }
+            return `${secs}s`;
+        }
+
+        function formatBoardSize(size) {
+            if (!Array.isArray(size) || size.length < 2) {
+                return '—';
+            }
+            return `${size[0].toFixed(1)} ft × ${size[1].toFixed(1)} ft`;
+        }
+
+        function closeEventSource() {
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+        }
+
+        function handleEvent(data) {
+            if (!data) return;
+            switch (data.type) {
+                case 'run_started':
+                    overlaySubtitle.textContent = `Total allotted solver time: ${formatSeconds(data.total_allotment)}.`;
+                    statusText.textContent = 'Solving…';
+                    break;
+                case 'phase_started':
+                    statusText.textContent = `Solving ${data.phase}`;
+                    phaseText.textContent = `${data.phase} (${(data.phase_index + 1)} of ${data.phase_count})`;
+                    phaseAllotmentText.textContent = data.time_limit_sec
+                        ? `${formatSeconds(data.time_limit_sec)} allotted`
+                        : 'No limit';
+                    attemptText.textContent = '—';
+                    gridText.textContent = '—';
+                    updateProgress(phaseProgressBar, phaseProgressLabel, 0);
+                    break;
+                case 'attempt_started':
+                    const boardLabel = formatBoardSize(data.board_size_ft);
+                    gridText.textContent = boardLabel;
+                    const attemptParts = [];
+                    attemptParts.push(`${data.attempt_index} of ${data.total_attempts}`);
+                    if (data.time_limit_sec != null) {
+                        attemptParts.push(`≤ ${formatSeconds(data.time_limit_sec)}`);
+                    }
+                    attemptText.textContent = `${boardLabel} (${attemptParts.join(', ')})`;
+                    elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
+                    if (data.overall_progress != null) {
+                        updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
+                    }
+                    break;
+                case 'attempt_completed':
+                    if (Array.isArray(data.board_size_ft)) {
+                        gridText.textContent = formatBoardSize(data.board_size_ft);
+                    }
+                    elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
+                    if (data.overall_progress != null) {
+                        updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
+                    }
+                    statusText.textContent = data.success ? 'Layout found!' : 'Exploring layouts…';
+                    break;
+                case 'phase_completed':
+                    statusText.textContent = data.success ? `${data.phase} complete` : `${data.phase} exhausted`;
+                    updateProgress(phaseProgressBar, phaseProgressLabel, 100);
+                    elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    break;
+                case 'run_completed':
+                    overlaySubtitle.textContent = data.success
+                        ? 'Solver finished. Preparing results…'
+                        : 'No solution found within allotted time.';
+                    statusText.textContent = data.success ? 'Solver finished' : 'Solver complete (no solution)';
+                    if (data.overall_progress != null) {
+                        updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
+                    }
+                    elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    break;
+                case 'error':
+                    statusText.textContent = 'Unable to start solver';
+                    overlaySubtitle.textContent = data.message || 'An unexpected error occurred.';
+                    overallProgressBar.style.width = '0%';
+                    phaseProgressBar.style.width = '0%';
+                    break;
+                case 'finished':
+                    closeEventSource();
+                    if (data.success) {
+                        window.location.href = `/runs/${data.run_id}/result`;
+                    } else if (data.error) {
+                        overlay.classList.add('error');
+                        overlayTitle.textContent = 'Solver error';
+                        overlaySubtitle.textContent = data.error;
+                        overlay.setAttribute('aria-hidden', 'false');
+                    } else {
+                        window.location.href = `/runs/${data.run_id}/result`;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            resetOverlay();
+            closeEventSource();
+            currentRunId = null;
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('{{ url_for('start_run') }}', {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (!response.ok) {
+                    throw new Error('Unable to start solver run.');
+                }
+                const payload = await response.json();
+                currentRunId = payload.run_id;
+                currentEventSource = new EventSource(`/runs/${currentRunId}/stream`);
+                currentEventSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleEvent(data);
+                    } catch (err) {
+                        console.error('Failed to parse progress event', err);
+                    }
+                };
+                currentEventSource.addEventListener('end', () => {
+                    closeEventSource();
+                });
+            } catch (error) {
+                console.error(error);
+                statusText.textContent = 'Unable to start solver';
+                overlaySubtitle.textContent = error.message || 'An unexpected error occurred.';
+                overlay.classList.add('error');
+            }
         });
     </script>
 </body>

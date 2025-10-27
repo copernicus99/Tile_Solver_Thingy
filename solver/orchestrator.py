@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from config import SETTINGS
 from .backtracking_solver import BacktrackingSolver, SolverOptions
@@ -35,18 +35,54 @@ class TileSolverOrchestrator:
             name: TileType(name, dims[0], dims[1]) for name, dims in SETTINGS.TILE_OPTIONS.items()
         }
 
-    def solve(self, selection: Dict[str, int]) -> Tuple[Optional[SolveResult], List[PhaseLog]]:
+    def solve(
+        self,
+        selection: Dict[str, int],
+        progress_callback: Optional[Callable[[Dict[str, object]], None]] = None,
+    ) -> Tuple[Optional[SolveResult], List[PhaseLog]]:
+        def emit(event_type: str, **payload: object) -> None:
+            if progress_callback:
+                event = {"type": event_type}
+                event.update(payload)
+                progress_callback(event)
+
         tile_quantities = self._build_quantities(selection)
         total_area_ft = sum(tile.area_ft2 * qty for tile, qty in tile_quantities.items())
         if total_area_ft <= 0:
             raise ValueError("No tiles selected")
         phases = self._select_phases(total_area_ft)
+        emit(
+            "run_started",
+            phases=[
+                {
+                    "name": phase.name,
+                    "time_limit_sec": phase.time_limit_sec,
+                    "allow_rotation": phase.allow_rotation,
+                    "allow_discards": phase.allow_discards,
+                }
+                for phase in phases
+            ],
+            total_allotment=sum(phase.time_limit_sec for phase in phases),
+        )
         logs: List[PhaseLog] = []
-        for phase in phases:
+        overall_start = time.time()
+        total_allotment = sum(phase.time_limit_sec for phase in phases)
+        candidate_boards = list(self._candidate_boards(total_area_ft))
+        for phase_index, phase in enumerate(phases):
             phase_start = time.time()
             attempts: List[PhaseAttempt] = []
             result: Optional[SolveResult] = None
-            for board_w, board_h in self._candidate_boards(total_area_ft):
+            emit(
+                "phase_started",
+                phase=phase.name,
+                time_limit_sec=phase.time_limit_sec,
+                allow_rotation=phase.allow_rotation,
+                allow_discards=phase.allow_discards,
+                phase_index=phase_index,
+                phase_count=len(phases),
+                overall_elapsed=time.time() - overall_start,
+            )
+            for attempt_index, (board_w, board_h) in enumerate(candidate_boards, start=1):
                 request = SolveRequest(tile_quantities, board_w, board_h, allow_rotation=phase.allow_rotation)
                 options = SolverOptions(
                     max_edge_cells=int(SETTINGS.MAX_EDGE_FT / self.unit_ft),
@@ -55,6 +91,18 @@ class TileSolverOrchestrator:
                     time_limit_sec=phase.time_limit_sec,
                 )
                 solver = BacktrackingSolver(request, options, self.unit_ft, phase.name)
+                emit(
+                    "attempt_started",
+                    phase=phase.name,
+                    attempt_index=attempt_index,
+                    total_attempts=len(candidate_boards),
+                    board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
+                    board_size_cells=(board_w, board_h),
+                    phase_index=phase_index,
+                    time_limit_sec=phase.time_limit_sec,
+                    overall_elapsed=time.time() - overall_start,
+                    phase_elapsed=time.time() - phase_start,
+                )
                 solve_start = time.time()
                 solve_result = solver.solve()
                 elapsed = time.time() - solve_start
@@ -67,13 +115,61 @@ class TileSolverOrchestrator:
                     success=solve_result is not None,
                 )
                 attempts.append(attempt)
+                phase_elapsed = time.time() - phase_start
+                prev_allotment = sum(p.time_limit_sec for p in phases[:phase_index])
+                overall_progress = 0.0
+                if total_allotment > 0:
+                    overall_progress = min(
+                        (prev_allotment + min(phase_elapsed, phase.time_limit_sec)) / total_allotment,
+                        1.0,
+                    )
+                emit(
+                    "attempt_completed",
+                    phase=phase.name,
+                    attempt_index=attempt_index,
+                    total_attempts=len(candidate_boards),
+                    board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
+                    board_size_cells=(board_w, board_h),
+                    elapsed=elapsed,
+                    success=solve_result is not None,
+                    backtracks=solver.stats.backtracks,
+                    phase_index=phase_index,
+                    time_limit_sec=phase.time_limit_sec,
+                    overall_elapsed=time.time() - overall_start,
+                    phase_elapsed=phase_elapsed,
+                    phase_progress=min(phase_elapsed / phase.time_limit_sec, 1.0)
+                    if phase.time_limit_sec
+                    else 1.0,
+                    overall_progress=overall_progress,
+                )
                 if solve_result:
                     result = solve_result
                     break
             total_elapsed = time.time() - phase_start
             logs.append(PhaseLog(phase.name, attempts, total_elapsed, result))
+            emit(
+                "phase_completed",
+                phase=phase.name,
+                total_elapsed=total_elapsed,
+                success=result is not None,
+                phase_index=phase_index,
+                phase_count=len(phases),
+                overall_elapsed=time.time() - overall_start,
+            )
             if result:
+                emit(
+                    "run_completed",
+                    success=True,
+                    overall_elapsed=time.time() - overall_start,
+                    overall_progress=1.0,
+                )
                 return result, logs
+        emit(
+            "run_completed",
+            success=False,
+            overall_elapsed=time.time() - overall_start,
+            overall_progress=1.0,
+        )
         return None, logs
 
     def _select_phases(self, total_area_ft: float):

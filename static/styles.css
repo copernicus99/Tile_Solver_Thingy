@@ -116,21 +116,111 @@ button[type="submit"]:hover {
 }
 
 .overlay .panel {
-    text-align: center;
-    padding: 2rem 3rem;
-    border-radius: 16px;
-    background: rgba(31, 45, 58, 0.9);
+    text-align: left;
+    padding: 2.25rem 2.5rem;
+    border-radius: 18px;
+    background: rgba(31, 45, 58, 0.92);
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45);
+    width: min(520px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+}
+
+.overlay.error .panel {
+    border: 1px solid rgba(255, 107, 107, 0.6);
+}
+
+.overlay-header {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
 }
 
 .overlay .spinner {
-    width: 56px;
-    height: 56px;
+    width: 52px;
+    height: 52px;
     border: 5px solid rgba(78, 205, 196, 0.2);
     border-top-color: var(--accent);
     border-radius: 50%;
-    margin: 0 auto 1.5rem;
     animation: spin 1s linear infinite;
+}
+
+.overlay-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+    margin: 0;
+}
+
+.overlay-stats div {
+    background: rgba(11, 14, 17, 0.35);
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(78, 205, 196, 0.15);
+}
+
+.overlay-stats dt {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(245, 247, 250, 0.55);
+}
+
+.overlay-stats dd {
+    margin: 0.25rem 0 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.progress-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.progress-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: rgba(245, 247, 250, 0.8);
+}
+
+.progress-bar {
+    height: 10px;
+    background: rgba(11, 14, 17, 0.45);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-bar div {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--accent), #65e2d9);
+    border-radius: inherit;
+    transition: width 0.25s ease-out;
+}
+
+.overlay-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.link-button {
+    background: transparent;
+    border: none;
+    color: rgba(245, 247, 250, 0.7);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+.link-button[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 @keyframes spin {
