@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Tile Solver Selection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="overlay" id="run-overlay">
+        <div class="panel">
+            <div class="spinner"></div>
+            <h2>Running tile solver...</h2>
+            <p>Please wait while we search for the optimum layout.</p>
+        </div>
+    </div>
+    <main>
+        <header>
+            <h1>Tile Layout Solver</h1>
+            <p class="subtitle">Select tile sizes and quantities to generate an optimum layout.</p>
+        </header>
+        <form action="{{ url_for('solve_tiles') }}" method="post" id="tile-form">
+            <div class="tiles-grid">
+                {% for name, dims in tile_options.items() %}
+                <div class="tile-card">
+                    <label for="{{ name }}">{{ name.replace('x', ' ft × ') }} ft tile</label>
+                    <select name="{{ name }}" id="{{ name }}">
+                        {% for i in range(0, max_quantity + 1) %}
+                        <option value="{{ i }}">{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="text-align:center;">
+                <button type="submit">Run Tile</button>
+            </div>
+        </form>
+    </main>
+    <script>
+        const form = document.getElementById('tile-form');
+        const overlay = document.getElementById('run-overlay');
+        form.addEventListener('submit', () => {
+            overlay.classList.add('active');
+        });
+    </script>
+</body>
+</html>
