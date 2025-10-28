@@ -152,7 +152,7 @@ class SolverOptionTests(unittest.TestCase):
         with mock.patch.object(
             TileSolverOrchestrator,
             "_candidate_boards",
-            return_value=[BoardCandidate(14, 14, tuple())],
+            return_value=[BoardCandidate(14, 14, 14 * 14, tuple())],
         ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
@@ -174,7 +174,7 @@ class PhasePopOutIntegrationTests(unittest.TestCase):
             (True, True, True, True),
             (True, True, True, True),
         )
-        self.candidate = [BoardCandidate(4, 4, (self.mask,))]
+        self.candidate = [BoardCandidate(4, 4, 14, (self.mask,))]
 
     def _run_with_overrides(self, selection, phase_sequence=None):
         records: List[Tuple[str, Optional[List[List[bool]]]]] = []
@@ -345,7 +345,7 @@ class DiscardHandlingTests(unittest.TestCase):
         with mock.patch.object(
             TileSolverOrchestrator,
             "_candidate_boards",
-            return_value=[BoardCandidate(4, 4, tuple())],
+            return_value=[BoardCandidate(4, 4, 16, tuple())],
         ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
