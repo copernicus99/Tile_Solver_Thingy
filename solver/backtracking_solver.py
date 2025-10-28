@@ -4,7 +4,14 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
+from solver.models import (
+    Placement,
+    SolveRequest,
+    SolveResult,
+    SolverStats,
+    TileInstance,
+    TileType,
+)
 
 
 MASKED_CELL = -3
