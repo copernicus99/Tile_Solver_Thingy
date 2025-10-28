@@ -180,7 +180,7 @@ button[type="submit"]:hover {
 
 .overlay-stats .grid-variant {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 500;
     color: rgba(245, 247, 250, 0.7);
     margin-top: 0.25rem;
