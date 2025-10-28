@@ -34,18 +34,22 @@ class Settings:
     }
 
     GRID_UNIT_FT = 0.5
+
     # Maximum allowable straight edge expressed as a fraction of the board side.
     # With the default GRID_UNIT_FT of 0.5, a 10 ft board (20 cells) and the
     # default ratio of 0.6 results in a 6 ft (12 cell) limit, matching the
     # previous fixed behaviour.
     MAX_EDGE_RATIO = 0.6
+
     MAX_EDGE_FT = 6.0
+
     # The 6 ft straight-edge limit applies to both internal seams and the board
     # perimeter.
     MAX_EDGE_INSIDE_ONLY = False
+
     PLUS_TOGGLE = True
     SAME_SHAPE_LIMIT = 1
-    MAX_POP_OUT_VARIANTS_PER_BOARD = 3
+    MAX_POP_OUT_VARIANTS_PER_BOARD = 6
     MAX_POP_OUT_DEPTH = 2
 
     PHASE_A = PhaseConfig(
@@ -53,7 +57,7 @@ class Settings:
         allow_rotation=True,
         allow_discards=False,
         allow_pop_outs=False,
-        time_limit_sec=600.0,
+        time_limit_sec=1200.0,
         first_board_time_share=.2,
     )
     PHASE_B = PhaseConfig(
@@ -61,7 +65,7 @@ class Settings:
         allow_rotation=True,
         allow_discards=True,
         allow_pop_outs=True,
-        time_limit_sec=600.0,
+        time_limit_sec=1800.0,
         first_board_time_share=.2,
     )
     PHASE_C = PhaseConfig(
@@ -69,7 +73,7 @@ class Settings:
         allow_rotation=True,
         allow_discards=False,
         allow_pop_outs=False,
-        time_limit_sec=600.0,
+        time_limit_sec=1200.0,
         first_board_time_share=.2,
     )
     PHASE_D = PhaseConfig(
@@ -77,7 +81,7 @@ class Settings:
         allow_rotation=True,
         allow_discards=True,
         allow_pop_outs=True,
-        time_limit_sec=600.0,
+        time_limit_sec=1800.0,
         first_board_time_share=.2,
     )
 
