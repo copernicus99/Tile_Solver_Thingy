@@ -465,10 +465,17 @@ class TileSolverOrchestrator:
         slack = width * height - target_cells
         if slack <= 0:
             # When the requested tile coverage exceeds the base board area we still
-            # want to explore pop-out variants. Fallback to removing a single strip
-            # of cells so that downstream code can construct up to the configured
-            # number of masks for the board.
-            slack = min(width, height)
+            # want to explore pop-out variants. Fallback to removing a mirrored pair
+            # of notches so that downstream code can construct up to the configured
+            # number of masks for the board. To keep the mirrored requirement intact
+            # we only consider even slack values that can be split across opposite
+            # sides of the board.
+            fallback = min(width, height)
+            if fallback % 2 != 0:
+                fallback -= 1
+            slack = max(fallback, 0)
+        if slack <= 0:
+            return ()
 
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         if max_variants <= 0:
@@ -528,38 +535,44 @@ class TileSolverOrchestrator:
             "right": width,
         }
 
-        for orientation in orientations:
-            dim = orientation_dims[orientation]
-            depth_limit = min(max_depth, orientation_depth_limits[orientation])
+        opposite_pairs = (("top", "bottom"), ("left", "right"))
+
+        def enumerate_symmetrical_options(pair: Tuple[str, str]) -> List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]]:
+            first, second = pair
+            depth_limit = min(
+                max_depth,
+                orientation_depth_limits[first],
+                orientation_depth_limits[second],
+            )
+            dim = min(orientation_dims[first], orientation_dims[second])
+            options: List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]] = []
             for depth in range(1, depth_limit + 1):
-                if slack % depth != 0:
-                    continue
-                length = slack // depth
-                if 0 < length <= dim:
-                    build_mask(((orientation, depth, length),))
+                max_length = min(dim, slack // (2 * depth))
+                for length in range(1, max_length + 1):
+                    removed = 2 * depth * length
+                    if removed <= 0 or removed > slack:
+                        continue
+                    options.append(((first, depth, length), (second, depth, length), removed))
+            return options
+
+        pair_options = {pair: enumerate_symmetrical_options(pair) for pair in opposite_pairs}
+
+        for pair in opposite_pairs:
+            for first_notch, second_notch, removed in pair_options[pair]:
+                if removed == slack:
+                    build_mask((first_notch, second_notch))
                 if len(masks) >= max_variants:
                     return tuple(masks)
 
-        opposite_pairs = (("top", "bottom"), ("left", "right"))
-        for first, second in opposite_pairs:
-            first_dim = orientation_dims[first]
-            second_dim = orientation_dims[second]
-            first_depth_limit = min(max_depth, orientation_depth_limits[first])
-            second_depth_limit = min(max_depth, orientation_depth_limits[second])
-            for depth1 in range(1, first_depth_limit + 1):
-                for depth2 in range(1, second_depth_limit + 1):
-                    max_length1 = min(first_dim, slack // depth1)
-                    for length1 in range(1, max_length1 + 1):
-                        remaining = slack - depth1 * length1
-                        if remaining <= 0:
-                            continue
-                        if remaining % depth2 != 0:
-                            continue
-                        length2 = remaining // depth2
-                        if 0 < length2 <= second_dim:
-                            build_mask(((first, depth1, length1), (second, depth2, length2)))
-                        if len(masks) >= max_variants:
-                            return tuple(masks)
+        horizontal_pair = opposite_pairs[0]
+        vertical_pair = opposite_pairs[1]
+        for h_first, h_second, h_removed in pair_options[horizontal_pair]:
+            for v_first, v_second, v_removed in pair_options[vertical_pair]:
+                if h_removed + v_removed != slack:
+                    continue
+                build_mask((h_first, h_second, v_first, v_second))
+                if len(masks) >= max_variants:
+                    return tuple(masks)
 
         return tuple(masks)
 

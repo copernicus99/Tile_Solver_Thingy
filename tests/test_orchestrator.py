@@ -105,11 +105,42 @@ class PopOutBoardTests(unittest.TestCase):
             "Expected at least one board candidate smaller than the tile coverage",
         )
         for candidate in insufficient:
-            self.assertEqual(
-                max_variants,
-                len(candidate.pop_out_masks),
-                "Boards with insufficient area should still receive full pop-out variants",
+            mask_count = len(candidate.pop_out_masks)
+            self.assertGreater(
+                mask_count,
+                0,
+                "Boards with insufficient area should still receive at least one mirrored variant",
             )
+            self.assertLessEqual(
+                mask_count,
+                max_variants,
+                "Boards should never exceed the configured pop-out variant cap",
+            )
+
+    def test_generated_masks_are_mirrored(self):
+        width = 6
+        height = 6
+        total_cells = width * height
+        slack = 4  # ensure at least one mirrored pair is required
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, total_cells - slack, default_depth
+        )
+        self.assertTrue(masks, "Expected mirrored pop-out masks to be generated")
+        for mask in masks:
+            removed = set()
+            for r, row in enumerate(mask):
+                for c, cell in enumerate(row):
+                    if not cell:
+                        removed.add((r, c))
+            self.assertTrue(removed, "Each mask should remove mirrored cells")
+            for r, c in removed:
+                mirror = (height - 1 - r, width - 1 - c)
+                self.assertIn(
+                    mirror,
+                    removed,
+                    "Pop-out masks must remove cells in mirrored pairs across the board",
+                )
 
 
 class SolverOptionTests(unittest.TestCase):
