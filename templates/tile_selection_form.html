@@ -25,7 +25,7 @@
                     <dd id="stat-phase">—</dd>
                 </div>
                 <div>
-                    <dt>Phase Allotment</dt>
+                    <dt>Phase Quota</dt>
                     <dd id="stat-phase-allotment">—</dd>
                 </div>
                 <div>
@@ -43,21 +43,6 @@
             </dl>
             <div class="progress-section">
                 <div class="progress-row">
-                    <span>Overall</span>
-                    <span id="overall-progress-label">0%</span>
-                </div>
-                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="overall-progress-label overall-progress-title">
-                    <title id="overall-progress-title">Overall solver progress</title>
-                    <defs>
-                        <linearGradient id="overall-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#4ecdc4"></stop>
-                            <stop offset="100%" stop-color="#65e2d9"></stop>
-                        </linearGradient>
-                    </defs>
-                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
-                    <rect class="progress-fill" id="overall-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#overall-progress-gradient)" style="--progress:0;"></rect>
-                </svg>
-                <div class="progress-row">
                     <span>Phase</span>
                     <span id="phase-progress-label">0%</span>
                 </div>
@@ -71,6 +56,21 @@
                     </defs>
                     <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
                     <rect class="progress-fill" id="phase-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#phase-progress-gradient)" style="--progress:0;"></rect>
+                </svg>
+                <div class="progress-row">
+                    <span>Overall</span>
+                    <span id="overall-progress-label">0%</span>
+                </div>
+                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="overall-progress-label overall-progress-title">
+                    <title id="overall-progress-title">Overall solver progress</title>
+                    <defs>
+                        <linearGradient id="overall-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#4ecdc4"></stop>
+                            <stop offset="100%" stop-color="#65e2d9"></stop>
+                        </linearGradient>
+                    </defs>
+                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                    <rect class="progress-fill" id="overall-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#overall-progress-gradient)" style="--progress:0;"></rect>
                 </svg>
             </div>
             <div class="overlay-footer">
@@ -181,15 +181,12 @@
             backtracks,
         }) {
             const lines = [];
-            if (boardLabel) {
+            const hasAttemptIndex = typeof attemptIndex === 'number' && attemptIndex > 0;
+            if (hasAttemptIndex) {
                 const attemptCount = typeof totalAttempts === 'number'
-                    ? `${attemptIndex} of ${totalAttempts}`
+                    ? `Attempt ${attemptIndex} of ${totalAttempts}`
                     : `Attempt ${attemptIndex}`;
-                const headerParts = [boardLabel];
-                if (attemptCount) {
-                    headerParts.push(`(${attemptCount})`);
-                }
-                lines.push(headerParts.join(' '));
+                lines.push(attemptCount);
             }
 
             const parsedTimeLimit = Number(timeLimitSec);
@@ -197,11 +194,11 @@
             const parsedElapsed = Number(attemptElapsed);
             const hasElapsed = Number.isFinite(parsedElapsed);
             if (hasTimeLimit && hasElapsed) {
-                lines.push(`TOT ${formatSeconds(parsedTimeLimit)} : ELAP ${formatSeconds(parsedElapsed)}`);
+                lines.push(`Total ${formatSeconds(parsedTimeLimit)}`);
             } else if (hasElapsed) {
-                lines.push(`ELAP ${formatSeconds(parsedElapsed)}`);
+                lines.push(`Elapsed ${formatSeconds(parsedElapsed)}`);
             } else if (hasTimeLimit) {
-                lines.push(`TOT ${formatSeconds(parsedTimeLimit)}`);
+                lines.push(`Total ${formatSeconds(parsedTimeLimit)}`);
             }
 
             const parsedBacktracks = Number(backtracks);
@@ -245,14 +242,14 @@
             if (!data) return;
             switch (data.type) {
                 case 'run_started':
-                    overlaySubtitle.textContent = `Total allotted solver time: ${formatSeconds(data.total_allotment)}.`;
+                    overlaySubtitle.textContent = `Total solver time quota: ${formatSeconds(data.total_allotment)}.`;
                     statusText.textContent = 'Solving…';
                     break;
                 case 'phase_started':
                     statusText.textContent = `Solving ${data.phase}`;
                     phaseText.textContent = `${data.phase} (${(data.phase_index + 1)} of ${data.phase_count})`;
                     phaseAllotmentText.textContent = data.time_limit_sec
-                        ? `${formatSeconds(data.time_limit_sec)} allotted`
+                        ? `${formatSeconds(data.time_limit_sec)}`
                         : 'No limit';
                     attemptText.textContent = '—';
                     gridText.textContent = '—';
@@ -326,7 +323,7 @@
                 case 'run_completed':
                     overlaySubtitle.textContent = data.success
                         ? 'Solver finished. Preparing results…'
-                        : 'No solution found within allotted time.';
+                        : 'No solution found within the time quota.';
                     statusText.textContent = data.success ? 'Solver finished' : 'Solver complete (no solution)';
                     if (data.overall_progress != null) {
                         updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
