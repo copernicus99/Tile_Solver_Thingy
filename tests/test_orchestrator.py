@@ -19,7 +19,7 @@ class CandidateBoardTests(unittest.TestCase):
     def test_returns_six_boards_reducing_by_one_foot(self):
         total_area_ft = 30.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth, 1)
         expected = [
             (12, 12),
             (10, 10),
@@ -34,13 +34,13 @@ class CandidateBoardTests(unittest.TestCase):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth, 1)
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
     def test_small_fractional_area_pads_up_to_one_foot(self):
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(0.3, default_depth)
+        candidates = self.orchestrator._candidate_boards(0.3, default_depth, 1)
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
@@ -71,13 +71,15 @@ class PopOutBoardTests(unittest.TestCase):
 
         mock_boards.assert_called()
         args = mock_boards.call_args[0]
-        self.assertGreaterEqual(len(args), 2)
+        self.assertGreaterEqual(len(args), 3)
         self.assertEqual(expected_depth, args[1])
+        expected_span = int(round(min(tile.width_ft, tile.height_ft) / self.orchestrator.unit_ft))
+        self.assertEqual(expected_span, args[2])
 
     def test_candidate_masks_preserve_target_area(self):
         total_area_ft = 30.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth, 1)
         self.assertTrue(candidates, "Expected at least one candidate board")
         first = candidates[0]
         self.assertTrue(first.pop_out_masks, "Pop-out masks should be generated when slack allows")
@@ -87,11 +89,16 @@ class PopOutBoardTests(unittest.TestCase):
         padded_area_ft = math.ceil(total_area_ft)
         target_cells = int(round(padded_area_ft / unit_area))
         self.assertEqual(target_cells, available_cells)
+        self.assertEqual(
+            len(first.pop_out_masks),
+            len(set(first.pop_out_masks)),
+            "Pop-out masks for a candidate board must all be unique",
+        )
 
     def test_masks_generated_even_when_tiles_exceed_board_area(self):
         total_area_ft = 150.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth, 1)
         unit_area = self.orchestrator.unit_ft ** 2
         padded_area_ft = math.ceil(total_area_ft)
         target_cells = int(round(padded_area_ft / unit_area))
@@ -105,11 +112,87 @@ class PopOutBoardTests(unittest.TestCase):
             "Expected at least one board candidate smaller than the tile coverage",
         )
         for candidate in insufficient:
-            self.assertEqual(
-                max_variants,
-                len(candidate.pop_out_masks),
-                "Boards with insufficient area should still receive full pop-out variants",
+            mask_count = len(candidate.pop_out_masks)
+            self.assertGreater(
+                mask_count,
+                0,
+                "Boards with insufficient area should still receive at least one mirrored variant",
             )
+            self.assertLessEqual(
+                mask_count,
+                max_variants,
+                "Boards should never exceed the configured pop-out variant cap",
+            )
+            self.assertEqual(
+                mask_count,
+                len(set(candidate.pop_out_masks)),
+                "Each board candidate should only include unique mirrored masks",
+            )
+
+    def test_generated_masks_are_mirrored(self):
+        width = 6
+        height = 6
+        total_cells = width * height
+        slack = 4  # ensure at least one mirrored pair is required
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, total_cells - slack, default_depth, 1
+        )
+        self.assertTrue(masks, "Expected mirrored pop-out masks to be generated")
+        for mask in masks:
+            removed = set()
+            for r, row in enumerate(mask):
+                for c, cell in enumerate(row):
+                    if not cell:
+                        removed.add((r, c))
+            self.assertTrue(removed, "Each mask should remove mirrored cells")
+            for r, c in removed:
+                mirror = (height - 1 - r, width - 1 - c)
+                self.assertIn(
+                    mirror,
+                    removed,
+                    "Pop-out masks must remove cells in mirrored pairs across the board",
+                )
+
+    def test_generated_masks_are_unique(self):
+        width = 6
+        height = 6
+        total_cells = width * height
+        slack = 8
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, total_cells - slack, default_depth, 1
+        )
+        self.assertTrue(masks, "Expected pop-out masks to be generated")
+        self.assertEqual(
+            len(masks),
+            len(set(masks)),
+            "Generated pop-out mask variants should be unique",
+        )
+
+    def test_generated_masks_respect_minimum_span(self):
+        width = 8
+        height = 8
+        total_cells = width * height
+        slack = 16
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        min_span = 4  # corresponds to 2 feet with the default 0.5 ft grid unit
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, total_cells - slack, default_depth, min_span
+        )
+        self.assertTrue(masks, "Expected pop-out masks to be generated")
+        options = self.orchestrator._enumerate_mirrored_notch_options(
+            width, height, slack, default_depth, min_span
+        )
+        self.assertTrue(options, "Expected mirrored notch options to be enumerated")
+        for pair, entries in options.items():
+            for first_notch, second_notch, _ in entries:
+                for notch in (first_notch, second_notch):
+                    self.assertGreaterEqual(
+                        notch[2],
+                        min_span,
+                        "Mask cutouts must be at least as wide as the smallest tile side",
+                    )
 
 
 class SolverOptionTests(unittest.TestCase):

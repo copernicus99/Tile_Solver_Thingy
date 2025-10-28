@@ -73,6 +73,7 @@ class TileSolverOrchestrator:
         if total_area_ft <= 0:
             raise ValueError("No tiles selected")
         max_pop_out_depth = self._derive_pop_out_depth_limit(tile_quantities)
+        min_notch_span = self._derive_min_notch_span(tile_quantities)
         phases = self._select_phases(total_area_ft)
         emit(
             "run_started",
@@ -95,7 +96,9 @@ class TileSolverOrchestrator:
         total_allotment = sum(
             phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
         )
-        candidate_boards = list(self._candidate_boards(total_area_ft, max_pop_out_depth))
+        candidate_boards = list(
+            self._candidate_boards(total_area_ft, max_pop_out_depth, min_notch_span)
+        )
         for phase_index, phase in enumerate(phases):
             phase_start = time.time()
             attempts: List[PhaseAttempt] = []
@@ -399,6 +402,23 @@ class TileSolverOrchestrator:
         depth_cells = int(math.floor(depth_ft / self.unit_ft + 1e-9))
         return max(depth_cells, 0)
 
+    def _derive_min_notch_span(self, tile_quantities: Dict[TileType, int]) -> int:
+        min_side_ft = None
+        for tile in tile_quantities.keys():
+            candidate = min(tile.width_ft, tile.height_ft)
+            if min_side_ft is None or candidate < min_side_ft:
+                min_side_ft = candidate
+
+        if not min_side_ft or min_side_ft <= 0:
+            return 1
+
+        span_cells = int(round(min_side_ft / self.unit_ft))
+        if span_cells <= 0:
+            return 1
+        if not math.isclose(min_side_ft / self.unit_ft, span_cells, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("Tile dimensions must align with the grid size defined by GRID_UNIT_FT.")
+        return span_cells
+
     def _phase_board_attempts(
         self,
         candidates: Sequence[BoardCandidate],
@@ -419,7 +439,9 @@ class TileSolverOrchestrator:
             for index, mask in enumerate(candidate.pop_out_masks[:max_variants], start=1):
                 yield candidate.width, candidate.height, mask, index
 
-    def _candidate_boards(self, total_area_ft: float, max_pop_out_depth: int) -> List[BoardCandidate]:
+    def _candidate_boards(
+        self, total_area_ft: float, max_pop_out_depth: int, min_notch_span: int
+    ) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
 
@@ -454,21 +476,35 @@ class TileSolverOrchestrator:
         for reduction in range(6):
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
-            pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells, max_pop_out_depth)
+            pop_out_masks = self._generate_pop_out_masks(
+                cells, cells, area_cells, max_pop_out_depth, min_notch_span
+            )
             boards.append(BoardCandidate(cells, cells, area_cells, pop_out_masks))
 
         return boards
 
     def _generate_pop_out_masks(
-        self, width: int, height: int, target_cells: int, max_depth: int
+        self,
+        width: int,
+        height: int,
+        target_cells: int,
+        max_depth: int,
+        min_notch_span: int,
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
         slack = width * height - target_cells
         if slack <= 0:
             # When the requested tile coverage exceeds the base board area we still
-            # want to explore pop-out variants. Fallback to removing a single strip
-            # of cells so that downstream code can construct up to the configured
-            # number of masks for the board.
-            slack = min(width, height)
+            # want to explore pop-out variants. Fallback to removing a mirrored pair
+            # of notches so that downstream code can construct up to the configured
+            # number of masks for the board. To keep the mirrored requirement intact
+            # we only consider even slack values that can be split across opposite
+            # sides of the board.
+            fallback = min(width, height)
+            if fallback % 2 != 0:
+                fallback -= 1
+            slack = max(fallback, 0)
+        if slack <= 0:
+            return ()
 
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         if max_variants <= 0:
@@ -476,7 +512,10 @@ class TileSolverOrchestrator:
 
         if max_depth <= 0:
             return ()
+        min_notch_span = max(1, min_notch_span)
+
         masks: List[Tuple[Tuple[bool, ...], ...]] = []
+        seen: set[Tuple[Tuple[bool, ...], ...]] = set()
 
         def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:
             if len(masks) >= max_variants:
@@ -512,9 +551,47 @@ class TileSolverOrchestrator:
                             removed += 1
             if removed != slack:
                 return
-            masks.append(tuple(tuple(row) for row in mask))
+            mask_tuple = tuple(tuple(row) for row in mask)
+            if mask_tuple in seen:
+                return
+            seen.add(mask_tuple)
+            masks.append(mask_tuple)
 
-        orientations = ("top", "bottom", "left", "right")
+        pair_options = self._enumerate_mirrored_notch_options(
+            width, height, slack, max_depth, min_notch_span
+        )
+
+        opposite_pairs = (("top", "bottom"), ("left", "right"))
+
+        for pair in opposite_pairs:
+            for first_notch, second_notch, removed in pair_options[pair]:
+                if removed == slack:
+                    build_mask((first_notch, second_notch))
+                if len(masks) >= max_variants:
+                    return tuple(masks)
+
+        horizontal_pair = opposite_pairs[0]
+        vertical_pair = opposite_pairs[1]
+        for h_first, h_second, h_removed in pair_options[horizontal_pair]:
+            for v_first, v_second, v_removed in pair_options[vertical_pair]:
+                if h_removed + v_removed != slack:
+                    continue
+                build_mask((h_first, h_second, v_first, v_second))
+                if len(masks) >= max_variants:
+                    return tuple(masks)
+
+        return tuple(masks)
+
+    def _enumerate_mirrored_notch_options(
+        self,
+        width: int,
+        height: int,
+        slack: int,
+        max_depth: int,
+        min_notch_span: int,
+    ) -> Dict[
+        Tuple[str, str], List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]]
+    ]:
         orientation_dims = {
             "top": width,
             "bottom": width,
@@ -528,40 +605,33 @@ class TileSolverOrchestrator:
             "right": width,
         }
 
-        for orientation in orientations:
-            dim = orientation_dims[orientation]
-            depth_limit = min(max_depth, orientation_depth_limits[orientation])
-            for depth in range(1, depth_limit + 1):
-                if slack % depth != 0:
-                    continue
-                length = slack // depth
-                if 0 < length <= dim:
-                    build_mask(((orientation, depth, length),))
-                if len(masks) >= max_variants:
-                    return tuple(masks)
-
         opposite_pairs = (("top", "bottom"), ("left", "right"))
-        for first, second in opposite_pairs:
-            first_dim = orientation_dims[first]
-            second_dim = orientation_dims[second]
-            first_depth_limit = min(max_depth, orientation_depth_limits[first])
-            second_depth_limit = min(max_depth, orientation_depth_limits[second])
-            for depth1 in range(1, first_depth_limit + 1):
-                for depth2 in range(1, second_depth_limit + 1):
-                    max_length1 = min(first_dim, slack // depth1)
-                    for length1 in range(1, max_length1 + 1):
-                        remaining = slack - depth1 * length1
-                        if remaining <= 0:
-                            continue
-                        if remaining % depth2 != 0:
-                            continue
-                        length2 = remaining // depth2
-                        if 0 < length2 <= second_dim:
-                            build_mask(((first, depth1, length1), (second, depth2, length2)))
-                        if len(masks) >= max_variants:
-                            return tuple(masks)
 
-        return tuple(masks)
+        pair_options: Dict[
+            Tuple[str, str], List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]]
+        ] = {}
+
+        for pair in opposite_pairs:
+            first, second = pair
+            depth_limit = min(
+                max_depth,
+                orientation_depth_limits[first],
+                orientation_depth_limits[second],
+            )
+            dim = min(orientation_dims[first], orientation_dims[second])
+            options: List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]] = []
+            for depth in range(1, depth_limit + 1):
+                max_length = min(dim, slack // (2 * depth))
+                if max_length < min_notch_span:
+                    continue
+                for length in range(min_notch_span, max_length + 1):
+                    removed = 2 * depth * length
+                    if removed <= 0 or removed > slack:
+                        continue
+                    options.append(((first, depth, length), (second, depth, length), removed))
+            pair_options[pair] = options
+
+        return pair_options
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt", "BoardCandidate"]
