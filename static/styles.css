@@ -178,6 +178,10 @@ button[type="submit"]:hover {
     font-weight: 600;
 }
 
+.overlay-stats #stat-attempt {
+    white-space: pre-line;
+}
+
 .progress-section {
     display: flex;
     flex-direction: column;
