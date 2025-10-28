@@ -520,39 +520,10 @@ class TileSolverOrchestrator:
         def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:
             if len(masks) >= max_variants:
                 return
-            mask = [[True for _ in range(width)] for _ in range(height)]
-            removed = 0
-            for orientation, depth, length in notches:
-                if orientation in ("top", "bottom"):
-                    if depth > height:
-                        return
-                    if length > width:
-                        return
-                    for offset in range(depth):
-                        row_idx = offset if orientation == "top" else height - 1 - offset
-                        for col in range(length):
-                            col_idx = col if orientation == "top" else width - 1 - col
-                            if not mask[row_idx][col_idx]:
-                                return
-                            mask[row_idx][col_idx] = False
-                            removed += 1
-                else:
-                    if depth > width:
-                        return
-                    if length > height:
-                        return
-                    for offset in range(depth):
-                        col_idx = offset if orientation == "left" else width - 1 - offset
-                        for row in range(length):
-                            row_idx = row if orientation == "left" else height - 1 - row
-                            if not mask[row_idx][col_idx]:
-                                return
-                            mask[row_idx][col_idx] = False
-                            removed += 1
-            if removed != slack:
-                return
-            mask_tuple = tuple(tuple(row) for row in mask)
-            if mask_tuple in seen:
+            mask_tuple = self._render_mask_from_notches(
+                width, height, slack, notches
+            )
+            if mask_tuple is None or mask_tuple in seen:
                 return
             seen.add(mask_tuple)
             masks.append(mask_tuple)
@@ -581,6 +552,70 @@ class TileSolverOrchestrator:
                     return tuple(masks)
 
         return tuple(masks)
+
+    def _render_mask_from_notches(
+        self,
+        width: int,
+        height: int,
+        slack: int,
+        notches: Sequence[Tuple[str, int, int]],
+    ) -> Optional[Tuple[Tuple[bool, ...], ...]]:
+        mask = [[True for _ in range(width)] for _ in range(height)]
+        removed_cells = set()
+
+        def emit_cell(row: int, col: int) -> bool:
+            if row < 0 or row >= height or col < 0 or col >= width:
+                return False
+            if (row, col) in removed_cells:
+                return False
+            removed_cells.add((row, col))
+            mask[row][col] = False
+            return True
+
+        for orientation, depth, length in notches:
+            if orientation in ("top", "bottom"):
+                limit_depth = height
+                limit_length = width
+            else:
+                limit_depth = width
+                limit_length = height
+
+            if depth <= 0 or length <= 0:
+                return None
+            if depth > limit_depth or length > limit_length:
+                return None
+
+            if orientation == "top":
+                for offset in range(depth):
+                    row_idx = offset
+                    for col in range(length):
+                        if not emit_cell(row_idx, col):
+                            return None
+            elif orientation == "bottom":
+                for offset in range(depth):
+                    row_idx = height - 1 - offset
+                    for col in range(length):
+                        if not emit_cell(row_idx, width - 1 - col):
+                            return None
+            elif orientation == "left":
+                for offset in range(depth):
+                    col_idx = offset
+                    for row in range(length):
+                        if not emit_cell(row, col_idx):
+                            return None
+            elif orientation == "right":
+                for offset in range(depth):
+                    col_idx = width - 1 - offset
+                    for row in range(length):
+                        if not emit_cell(height - 1 - row, col_idx):
+                            return None
+            else:
+                return None
+
+        if len(removed_cells) != slack:
+            return None
+
+        return tuple(tuple(row) for row in mask)
 
     def _enumerate_mirrored_notch_options(
         self,
