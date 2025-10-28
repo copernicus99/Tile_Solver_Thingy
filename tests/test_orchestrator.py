@@ -136,11 +136,48 @@ class PopOutBoardTests(unittest.TestCase):
             self.assertTrue(removed, "Each mask should remove mirrored cells")
             for r, c in removed:
                 mirror = (height - 1 - r, width - 1 - c)
-                self.assertIn(
-                    mirror,
-                    removed,
-                    "Pop-out masks must remove cells in mirrored pairs across the board",
-                )
+            self.assertIn(
+                mirror,
+                removed,
+                "Pop-out masks must remove cells in mirrored pairs across the board",
+            )
+
+    def test_generated_masks_are_unique(self):
+        width = 8
+        height = 8
+        total_cells = width * height
+        slack = 12
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, total_cells - slack, default_depth
+        )
+        self.assertGreater(len(masks), 1, "Expected multiple pop-out masks to be generated")
+        unique_masks = {mask for mask in masks}
+        self.assertEqual(
+            len(masks),
+            len(unique_masks),
+            "Pop-out mask variants must be unique",
+        )
+
+    def test_fallback_masks_use_minimum_tile_span(self):
+        width = 10
+        height = 10
+        total_cells = width * height
+        target_cells = total_cells + 20
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, target_cells, default_depth
+        )
+        self.assertTrue(masks, "Fallback pop-out masks should be generated when slack is absent")
+        expected_removed = self.orchestrator._minimum_mask_span(width, height)
+        for mask in masks:
+            available = sum(1 for row in mask for cell in row if cell)
+            removed = total_cells - available
+            self.assertEqual(
+                expected_removed,
+                removed,
+                "Fallback pop-out masks must remove the minimum mirrored span",
+            )
 
 
 class SolverOptionTests(unittest.TestCase):
