@@ -6,8 +6,12 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from config import SETTINGS, PhaseConfig
-from solver.backtracking_solver import BacktrackingSolver, SolverOptions
-from solver.models import SolveRequest, SolveResult, TileType
+try:  # pragma: no cover - prefer package-relative import
+    from .backtracking_solver import BacktrackingSolver, SolverOptions
+    from .models import SolveRequest, SolveResult, TileType
+except ImportError:  # pragma: no cover - allow running as a script
+    from solver.backtracking_solver import BacktrackingSolver, SolverOptions  # type: ignore[no-redef]
+    from solver.models import SolveRequest, SolveResult, TileType  # type: ignore[no-redef]
 
 
 @dataclass(frozen=True)

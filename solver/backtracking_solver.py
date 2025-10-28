@@ -4,14 +4,24 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from solver.models import (
-    Placement,
-    SolveRequest,
-    SolveResult,
-    SolverStats,
-    TileInstance,
-    TileType,
-)
+try:  # pragma: no cover - handled in import fallback
+    from .models import (
+        Placement,
+        SolveRequest,
+        SolveResult,
+        SolverStats,
+        TileInstance,
+        TileType,
+    )
+except ImportError:  # pragma: no cover - direct execution fallback
+    from solver.models import (  # type: ignore[no-redef]
+        Placement,
+        SolveRequest,
+        SolveResult,
+        SolverStats,
+        TileInstance,
+        TileType,
+    )
 
 
 MASKED_CELL = -3
