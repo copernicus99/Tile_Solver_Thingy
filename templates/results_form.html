@@ -32,6 +32,16 @@
                 </li>
                 {% endfor %}
             </ul>
+            {% if result.discarded_tiles %}
+            <h3>Discarded Tiles</h3>
+            <ul>
+                {% for tile in result.discarded_tiles %}
+                <li>
+                    {{ tile.identifier }} — {{ '%.1f'|format(tile.type.width_ft) }} ft × {{ '%.1f'|format(tile.type.height_ft) }} ft
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
             <h3>Downloads</h3>
             <ul>
                 {% if outputs.get('coords') %}<li><a class="download-link" href="{{ url_for('serve_output', filename=outputs.get('coords')) }}" download>Tile coordinates (coords.txt)</a></li>{% endif %}

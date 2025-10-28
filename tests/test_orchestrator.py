@@ -1,11 +1,13 @@
 import math
 import unittest
+from collections import OrderedDict
 from unittest import mock
 
 from config import SETTINGS
 
+from solver.backtracking_solver import BacktrackingSolver, SolverOptions
 from solver.orchestrator import TileSolverOrchestrator
-from solver.models import SolverStats
+from solver.models import SolveRequest, SolverStats, TileType
 
 
 class CandidateBoardTests(unittest.TestCase):
@@ -84,6 +86,79 @@ class SolverOptionTests(unittest.TestCase):
         self.assertTrue(
             captured_options[0].max_edge_include_perimeter,
             "Perimeter seams must be included when enforcing straight-edge limits.",
+        )
+
+
+class DiscardHandlingTests(unittest.TestCase):
+    def setUp(self):
+        self.unit = SETTINGS.GRID_UNIT_FT
+        self.square_tile = TileType("2x2", 2.0, 2.0)
+        self.extra_tile = TileType("1x1", 1.0, 1.0)
+        cells = int(round(2.0 / self.unit))
+        self.board_cells = (cells, cells)
+        self.options = SolverOptions(
+            max_edge_cells_horizontal=10,
+            max_edge_cells_vertical=10,
+            max_edge_include_perimeter=True,
+            same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,
+            enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
+            time_limit_sec=None,
+        )
+
+    def _request(self, allow_discards: bool) -> SolveRequest:
+        quantities = OrderedDict(
+            (
+                (self.square_tile, 1),
+                (self.extra_tile, 1),
+            )
+        )
+        return SolveRequest(
+            tile_quantities=quantities,
+            board_width_cells=self.board_cells[0],
+            board_height_cells=self.board_cells[1],
+            allow_rotation=True,
+            allow_pop_outs=False,
+            allow_discards=allow_discards,
+        )
+
+    def test_solver_requires_all_tiles_when_discards_disallowed(self):
+        solver = BacktrackingSolver(
+            self._request(allow_discards=False),
+            self.options,
+            self.unit,
+            "Phase Test",
+        )
+        self.assertIsNone(
+            solver.solve(),
+            "Solver should not succeed when required tiles cannot all be placed",
+        )
+
+    def test_solver_records_discards_when_allowed(self):
+        solver = BacktrackingSolver(
+            self._request(allow_discards=True),
+            self.options,
+            self.unit,
+            "Phase Test",
+        )
+        result = solver.solve()
+        self.assertIsNotNone(result, "Solver should return a layout when discards are allowed")
+        self.assertEqual(len(result.placements), 1)
+        self.assertEqual(len(result.discarded_tiles), 1)
+        self.assertEqual(result.discarded_tiles[0].type.name, "1x1")
+
+    def test_phase_log_records_discards_for_successful_phase(self):
+        orchestrator = TileSolverOrchestrator()
+        result, logs = orchestrator.solve({"2x2": 1, "1x1": 1})
+
+        self.assertIsNotNone(result, "Expected the orchestrator to find a solution when discards are permitted")
+        phase_with_result = next((log for log in logs if log.result is not None), None)
+
+        self.assertIsNotNone(phase_with_result, "A phase log should capture the successful solver result")
+        self.assertIs(phase_with_result.result, result)
+        self.assertTrue(result.discarded_tiles, "The solver should report discarded tiles for this scenario")
+        self.assertEqual(
+            [tile.identifier for tile in result.discarded_tiles],
+            [tile.identifier for tile in phase_with_result.result.discarded_tiles],
         )
 
 
