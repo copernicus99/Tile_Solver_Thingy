@@ -113,6 +113,7 @@ class TileSolverOrchestrator:
                     board_h,
                     allow_rotation=phase.allow_rotation,
                     allow_pop_outs=phase.allow_pop_outs,
+                    allow_discards=phase.allow_discards,
                 )
                 options = SolverOptions(
                     max_edge_cells_horizontal=self._max_edge_for_dimension(board_w),

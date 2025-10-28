@@ -36,6 +36,7 @@ class BacktrackingSolver:
         self.width = request.board_width_cells
         self.height = request.board_height_cells
         self.allow_pop_outs = request.allow_pop_outs
+        self.allow_discards = request.allow_discards
         self.grid: List[List[int]] = [[-1 for _ in range(self.width)] for _ in range(self.height)]
         self.tiles: List[TileInstance] = []
         self.placements: Dict[int, Placement] = {}
@@ -66,8 +67,14 @@ class BacktrackingSolver:
         success = self._search()
         if not success:
             return None
+        discarded: List[TileInstance] = [
+            self.tiles[idx]
+            for idx, used in enumerate(self._used)
+            if not used
+        ]
+        if discarded and not self.allow_discards:
+            return None
         placements = list(self.placements.values())
-        discarded: List[TileInstance] = []
         return SolveResult(
             placements=placements,
             board_width_cells=self.width,
@@ -392,6 +399,8 @@ class BacktrackingSolver:
         if self.options.enforce_plus_rule and not self._check_plus_rule(0, 0, self.width, self.height):
             return False
         if not self._validate_same_shape_on_completion():
+            return False
+        if not self.allow_discards and not all(self._used):
             return False
         return True
 

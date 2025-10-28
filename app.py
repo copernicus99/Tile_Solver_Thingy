@@ -162,6 +162,16 @@ class RunLogWriter:
                 )
             if phase_log.result:
                 lines.append("  Result achieved")
+                if phase_log.result.discarded_tiles:
+                    lines.append("  Discarded tiles:")
+                    for tile in phase_log.result.discarded_tiles:
+                        lines.append(
+                            "    - {identifier} ({width:.1f}ft × {height:.1f}ft)".format(
+                                identifier=tile.identifier,
+                                width=tile.type.width_ft,
+                                height=tile.type.height_ft,
+                            )
+                        )
             lines.append("")
         if error:
             lines.append(f"Run ended with error: {error}")
