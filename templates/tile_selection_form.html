@@ -43,35 +43,35 @@
             </dl>
             <div class="progress-section">
                 <div class="progress-row">
-                    <span>Phase</span>
-                    <span id="phase-progress-label">0%</span>
+                    <span class="progress-label">Phase</span>
+                    <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="phase-progress-label phase-progress-title">
+                        <title id="phase-progress-title">Current phase progress</title>
+                        <defs>
+                            <linearGradient id="phase-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#4ecdc4"></stop>
+                                <stop offset="100%" stop-color="#65e2d9"></stop>
+                            </linearGradient>
+                        </defs>
+                        <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                        <rect class="progress-fill" id="phase-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#phase-progress-gradient)" style="--progress:0;"></rect>
+                    </svg>
+                    <span id="phase-progress-label" class="progress-value">0%</span>
                 </div>
-                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="phase-progress-label phase-progress-title">
-                    <title id="phase-progress-title">Current phase progress</title>
-                    <defs>
-                        <linearGradient id="phase-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#4ecdc4"></stop>
-                            <stop offset="100%" stop-color="#65e2d9"></stop>
-                        </linearGradient>
-                    </defs>
-                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
-                    <rect class="progress-fill" id="phase-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#phase-progress-gradient)" style="--progress:0;"></rect>
-                </svg>
                 <div class="progress-row">
-                    <span>Overall</span>
-                    <span id="overall-progress-label">0%</span>
+                    <span class="progress-label">Overall</span>
+                    <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="overall-progress-label overall-progress-title">
+                        <title id="overall-progress-title">Overall solver progress</title>
+                        <defs>
+                            <linearGradient id="overall-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#4ecdc4"></stop>
+                                <stop offset="100%" stop-color="#65e2d9"></stop>
+                            </linearGradient>
+                        </defs>
+                        <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                        <rect class="progress-fill" id="overall-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#overall-progress-gradient)" style="--progress:0;"></rect>
+                    </svg>
+                    <span id="overall-progress-label" class="progress-value">0%</span>
                 </div>
-                <svg class="progress-svg" viewBox="0 0 100 8" role="img" aria-labelledby="overall-progress-label overall-progress-title">
-                    <title id="overall-progress-title">Overall solver progress</title>
-                    <defs>
-                        <linearGradient id="overall-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#4ecdc4"></stop>
-                            <stop offset="100%" stop-color="#65e2d9"></stop>
-                        </linearGradient>
-                    </defs>
-                    <rect class="progress-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
-                    <rect class="progress-fill" id="overall-progress" x="0" y="0" width="100" height="8" rx="4" ry="4" fill="url(#overall-progress-gradient)" style="--progress:0;"></rect>
-                </svg>
             </div>
             <div class="overlay-footer">
                 <button type="button" id="overlay-hide" class="link-button" hidden>Hide</button>
@@ -203,7 +203,7 @@
 
             const parsedBacktracks = Number(backtracks);
             if (Number.isFinite(parsedBacktracks)) {
-                lines.push(`${formatIntegerWithSeparators(parsedBacktracks)} backtracks`);
+                lines.push(`Backtracks ${formatIntegerWithSeparators(parsedBacktracks)}`);
             }
 
             return lines.join('\n');
