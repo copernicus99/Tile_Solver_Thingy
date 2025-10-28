@@ -78,7 +78,7 @@
                     <ul>
                         {% for attempt in entry.attempts %}
                         <li>
-                            Board {{ '%.2f'|format(attempt.board_size_ft[0]) }} ft × {{ '%.2f'|format(attempt.board_size_ft[1]) }} ft — {{ '%.4f'|format(attempt.elapsed) }}s,
+                            Board {{ '%.2f'|format(attempt.board_size_ft[0]) }} ft × {{ '%.2f'|format(attempt.board_size_ft[1]) }} ft ({{ attempt.variant_label }}) — {{ '%.4f'|format(attempt.elapsed) }}s,
                             backtracks {{ attempt.backtracks }}, success {{ 'yes' if attempt.success else 'no' }}
                         </li>
                         {% endfor %}

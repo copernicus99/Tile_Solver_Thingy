@@ -29,6 +29,16 @@ class PhaseAttempt:
     elapsed: float
     backtracks: int
     success: bool
+    variant_kind: str = "initial"
+    variant_index: Optional[int] = None
+
+    @property
+    def variant_label(self) -> str:
+        if self.variant_kind == "mask":
+            if self.variant_index is not None:
+                return f"Mask {self.variant_index}"
+            return "Mask"
+        return "Initial"
 
 
 @dataclass
@@ -103,7 +113,7 @@ class TileSolverOrchestrator:
                 self._phase_board_attempts(candidate_boards, phase.allow_pop_outs)
             )
             total_attempts = len(phase_candidates)
-            for attempt_index, (board_w, board_h, mask) in enumerate(
+            for attempt_index, (board_w, board_h, mask, mask_index) in enumerate(
                 phase_candidates, start=1
             ):
                 phase_limit = phase.time_limit_sec
@@ -123,6 +133,12 @@ class TileSolverOrchestrator:
                 else:
                     remaining_time = None
                     attempt_limit = None
+                variant_kind = "mask" if mask is not None else "initial"
+                variant_label = (
+                    "Initial"
+                    if variant_kind == "initial"
+                    else (f"Mask {mask_index}" if mask_index is not None else "Mask")
+                )
                 request = SolveRequest(
                     tile_quantities,
                     board_w,
@@ -176,6 +192,9 @@ class TileSolverOrchestrator:
                         overall_progress=overall_progress,
                         attempt_elapsed=solver_instance.stats.elapsed,
                         backtracks=solver_instance.stats.backtracks,
+                        variant_kind=variant_kind,
+                        variant_index=mask_index,
+                        variant_label=variant_label,
                     )
 
                 solver = BacktrackingSolver(
@@ -196,6 +215,9 @@ class TileSolverOrchestrator:
                     time_limit_sec=attempt_limit_value,
                     overall_elapsed=time.time() - overall_start,
                     phase_elapsed=time.time() - phase_start,
+                    variant_kind=variant_kind,
+                    variant_index=mask_index,
+                    variant_label=variant_label,
                 )
                 solve_start = time.time()
                 solve_result = solver.solve()
@@ -207,6 +229,8 @@ class TileSolverOrchestrator:
                     elapsed=elapsed,
                     backtracks=solver.stats.backtracks,
                     success=solve_result is not None,
+                    variant_kind=variant_kind,
+                    variant_index=mask_index,
                 )
                 attempts.append(attempt)
                 phase_elapsed = time.time() - phase_start
@@ -249,6 +273,9 @@ class TileSolverOrchestrator:
                         else 0.0
                     ),
                     overall_progress=overall_progress,
+                    variant_kind=variant_kind,
+                    variant_index=mask_index,
+                    variant_label=variant_label,
                 )
                 if solve_result:
                     result = solve_result
@@ -296,15 +323,15 @@ class TileSolverOrchestrator:
         if phase_limit is None:
             return remaining_time
         first_share = min(max(phase.first_board_time_share, 0.0), 1.0)
-        additional_slots = min(5, max(total_attempts - 1, 0))
-        if additional_slots == 0 and total_attempts <= 1:
+        remaining_attempts = max(total_attempts - 1, 0)
+        if remaining_attempts == 0 and total_attempts <= 1:
             # Allow the lone attempt to consume the entire phase allotment.
             first_share = 1.0
         remainder_share = max(0.0, 1.0 - first_share)
         if attempt_index == 1:
             share = first_share
-        elif additional_slots > 0 and attempt_index <= 1 + additional_slots:
-            share = remainder_share / additional_slots if additional_slots else 0.0
+        elif remaining_attempts > 0:
+            share = remainder_share / remaining_attempts if remaining_attempts else 0.0
         else:
             share = 0.0
         attempt_cap = phase_limit * share
@@ -353,14 +380,14 @@ class TileSolverOrchestrator:
 
     def _phase_board_attempts(
         self, candidates: Sequence[BoardCandidate], allow_pop_outs: bool
-    ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]]]]:
+    ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         for candidate in candidates:
-            yield candidate.width, candidate.height, None
+            yield candidate.width, candidate.height, None, None
             if not allow_pop_outs or max_variants <= 0:
                 continue
-            for mask in candidate.pop_out_masks[:max_variants]:
-                yield candidate.width, candidate.height, mask
+            for index, mask in enumerate(candidate.pop_out_masks[:max_variants], start=1):
+                yield candidate.width, candidate.height, mask, index
 
     def _candidate_boards(self, total_area_ft: float) -> List[BoardCandidate]:
         if total_area_ft <= 0:
