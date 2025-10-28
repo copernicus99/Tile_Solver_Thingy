@@ -158,7 +158,53 @@
             if (minutes > 0) {
                 return `${minutes}m ${secs}s`;
             }
-            return `${secs}s`;
+            if (secs > 0) {
+                return `${secs}s`;
+            }
+            return '0s';
+        }
+
+        function formatIntegerWithSeparators(value) {
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return value;
+            }
+            return value.toLocaleString();
+        }
+
+        function buildAttemptDisplay({
+            boardLabel,
+            attemptIndex,
+            totalAttempts,
+            timeLimitSec,
+            attemptElapsed,
+            backtracks,
+        }) {
+            const lines = [];
+            if (boardLabel) {
+                const attemptCount = typeof totalAttempts === 'number'
+                    ? `${attemptIndex} of ${totalAttempts}`
+                    : `Attempt ${attemptIndex}`;
+                lines.push(`${boardLabel} (${attemptCount})`);
+            }
+
+            const parsedTimeLimit = Number(timeLimitSec);
+            const hasTimeLimit = Number.isFinite(parsedTimeLimit);
+            const parsedElapsed = Number(attemptElapsed);
+            const hasElapsed = Number.isFinite(parsedElapsed);
+            if (hasTimeLimit && hasElapsed) {
+                lines.push(`${formatSeconds(parsedTimeLimit)} : ${formatSeconds(parsedElapsed)} elapsed`);
+            } else if (hasElapsed) {
+                lines.push(`${formatSeconds(parsedElapsed)} elapsed`);
+            } else if (hasTimeLimit) {
+                lines.push(`${formatSeconds(parsedTimeLimit)}`);
+            }
+
+            const parsedBacktracks = Number(backtracks);
+            if (Number.isFinite(parsedBacktracks)) {
+                lines.push(`${formatIntegerWithSeparators(parsedBacktracks)} backtracks`);
+            }
+
+            return lines.join('\n');
         }
 
         function formatBoardSize(size) {
@@ -195,12 +241,14 @@
                 case 'attempt_started':
                     const boardLabel = formatBoardSize(data.board_size_ft);
                     gridText.textContent = boardLabel;
-                    const attemptParts = [];
-                    attemptParts.push(`${data.attempt_index} of ${data.total_attempts}`);
-                    if (data.time_limit_sec != null) {
-                        attemptParts.push(`≤ ${formatSeconds(data.time_limit_sec)}`);
-                    }
-                    attemptText.textContent = `${boardLabel} (${attemptParts.join(', ')})`;
+                    attemptText.textContent = buildAttemptDisplay({
+                        boardLabel,
+                        attemptIndex: data.attempt_index,
+                        totalAttempts: data.total_attempts,
+                        timeLimitSec: data.time_limit_sec,
+                        attemptElapsed: data.attempt_elapsed,
+                        backtracks: data.backtracks,
+                    });
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
                     updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
                     if (data.overall_progress != null) {
@@ -209,7 +257,16 @@
                     break;
                 case 'attempt_completed':
                     if (Array.isArray(data.board_size_ft)) {
-                        gridText.textContent = formatBoardSize(data.board_size_ft);
+                        const boardLabelCompleted = formatBoardSize(data.board_size_ft);
+                        gridText.textContent = boardLabelCompleted;
+                        attemptText.textContent = buildAttemptDisplay({
+                            boardLabel: boardLabelCompleted,
+                            attemptIndex: data.attempt_index,
+                            totalAttempts: data.total_attempts,
+                            timeLimitSec: data.time_limit_sec,
+                            attemptElapsed: data.attempt_elapsed,
+                            backtracks: data.backtracks,
+                        });
                     }
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
                     updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
@@ -223,18 +280,14 @@
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabel = formatBoardSize(data.board_size_ft);
                         gridText.textContent = boardLabel;
-                        const parts = [];
-                        parts.push(`${data.attempt_index} of ${data.total_attempts}`);
-                        if (data.time_limit_sec != null) {
-                            parts.push(`≤ ${formatSeconds(data.time_limit_sec)}`);
-                        }
-                        if (typeof data.attempt_elapsed === 'number') {
-                            parts.push(`${formatSeconds(data.attempt_elapsed)} elapsed`);
-                        }
-                        if (typeof data.backtracks === 'number') {
-                            parts.push(`${data.backtracks} backtracks`);
-                        }
-                        attemptText.textContent = `${boardLabel} (${parts.join(', ')})`;
+                        attemptText.textContent = buildAttemptDisplay({
+                            boardLabel,
+                            attemptIndex: data.attempt_index,
+                            totalAttempts: data.total_attempts,
+                            timeLimitSec: data.time_limit_sec,
+                            attemptElapsed: data.attempt_elapsed,
+                            backtracks: data.backtracks,
+                        });
                     }
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
                     updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
