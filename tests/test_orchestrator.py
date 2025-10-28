@@ -88,6 +88,29 @@ class PopOutBoardTests(unittest.TestCase):
         target_cells = int(round(padded_area_ft / unit_area))
         self.assertEqual(target_cells, available_cells)
 
+    def test_masks_generated_even_when_tiles_exceed_board_area(self):
+        total_area_ft = 150.0
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        unit_area = self.orchestrator.unit_ft ** 2
+        padded_area_ft = math.ceil(total_area_ft)
+        target_cells = int(round(padded_area_ft / unit_area))
+        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
+        self.assertGreater(max_variants, 0)
+        insufficient = [
+            c for c in candidates if (c.width * c.height) < target_cells
+        ]
+        self.assertTrue(
+            insufficient,
+            "Expected at least one board candidate smaller than the tile coverage",
+        )
+        for candidate in insufficient:
+            self.assertEqual(
+                max_variants,
+                len(candidate.pop_out_masks),
+                "Boards with insufficient area should still receive full pop-out variants",
+            )
+
 
 class SolverOptionTests(unittest.TestCase):
     def test_max_edge_limit_scales_with_board_size(self):
