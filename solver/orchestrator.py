@@ -493,16 +493,9 @@ class TileSolverOrchestrator:
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
         slack = width * height - target_cells
         if slack <= 0:
-            # When the requested tile coverage exceeds the base board area we still
-            # want to explore pop-out variants. Fallback to removing a mirrored pair
-            # of notches so that downstream code can construct up to the configured
-            # number of masks for the board. To keep the mirrored requirement intact
-            # we only consider even slack values that can be split across opposite
-            # sides of the board.
-            fallback = min(width, height)
-            if fallback % 2 != 0:
-                fallback -= 1
-            slack = max(fallback, 0)
+            slack = self._resolve_slack_for_masks(
+                width, height, max_depth, min_notch_span
+            )
         if slack <= 0:
             return ()
 
@@ -552,6 +545,61 @@ class TileSolverOrchestrator:
                     return tuple(masks)
 
         return tuple(masks)
+
+    def _resolve_slack_for_masks(
+        self,
+        width: int,
+        height: int,
+        max_depth: int,
+        min_notch_span: int,
+    ) -> int:
+        """Find the smallest slack that can yield a mirrored mask variant."""
+
+        max_cells = width * height
+        if max_cells <= 0:
+            return 0
+
+        start = max(2, 2 * min_notch_span)
+        if start % 2 != 0:
+            start += 1
+
+        for candidate in range(start, max_cells + 1, 2):
+            pair_options = self._enumerate_mirrored_notch_options(
+                width, height, candidate, max_depth, min_notch_span
+            )
+            if not pair_options:
+                continue
+            if self._has_mask_for_slack(pair_options, candidate):
+                return candidate
+
+        return 0
+
+    def _has_mask_for_slack(
+        self,
+        pair_options: Dict[
+            Tuple[str, str], List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]]
+        ],
+        slack: int,
+    ) -> bool:
+        horizontal_pair = ("top", "bottom")
+        vertical_pair = ("left", "right")
+
+        horizontal_entries = pair_options.get(horizontal_pair, [])
+        vertical_entries = pair_options.get(vertical_pair, [])
+
+        for _, _, removed in horizontal_entries:
+            if removed == slack:
+                return True
+        for _, _, removed in vertical_entries:
+            if removed == slack:
+                return True
+
+        for h_first, h_second, h_removed in horizontal_entries:
+            for v_first, v_second, v_removed in vertical_entries:
+                if h_removed + v_removed == slack:
+                    return True
+
+        return False
 
     def _render_mask_from_notches(
         self,

@@ -129,6 +129,31 @@ class PopOutBoardTests(unittest.TestCase):
                 "Each board candidate should only include unique mirrored masks",
             )
 
+    def test_insufficient_board_masks_respect_min_span_fallback(self):
+        width = 6
+        height = 4
+        total_cells = width * height
+        target_cells = total_cells + 4  # ensures slack would otherwise be negative
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        min_span = 3
+
+        masks = self.orchestrator._generate_pop_out_masks(
+            width, height, target_cells, default_depth, min_span
+        )
+
+        self.assertTrue(masks, "Expected fallback masks when slack is unavailable")
+
+        removed_counts = set()
+        for mask in masks:
+            available = sum(1 for row in mask for cell in row if cell)
+            removed_counts.add(total_cells - available)
+
+        self.assertEqual(
+            {2 * min_span},
+            removed_counts,
+            "Fallback mask generation should remove the minimal mirrored slack that satisfies the span",
+        )
+
     def test_generated_masks_are_mirrored(self):
         width = 6
         height = 6
