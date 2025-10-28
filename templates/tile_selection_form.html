@@ -33,8 +33,12 @@
                     <dd id="stat-attempt">—</dd>
                 </div>
                 <div>
-                    <dt>Grid</dt>
+                    <dt>Evaluating Grid</dt>
                     <dd id="stat-grid">—</dd>
+                </div>
+                <div class="full-row">
+                    <dt>Total Quota</dt>
+                    <dd id="stat-total-quota">—</dd>
                 </div>
                 <div class="full-row">
                     <dt>Elapsed Time</dt>
@@ -111,6 +115,7 @@
         const attemptText = document.getElementById('stat-attempt');
         const gridText = document.getElementById('stat-grid');
         const elapsedText = document.getElementById('stat-elapsed');
+        const totalQuotaText = document.getElementById('stat-total-quota');
         const overallProgressBar = document.getElementById('overall-progress');
         const phaseProgressBar = document.getElementById('phase-progress');
         const overallProgressLabel = document.getElementById('overall-progress-label');
@@ -126,6 +131,7 @@
             phaseAllotmentText.textContent = '—';
             attemptText.textContent = '—';
             gridText.textContent = '—';
+            totalQuotaText.textContent = '—';
             elapsedText.textContent = '0s';
             updateProgress(overallProgressBar, overallProgressLabel, 0);
             updateProgress(phaseProgressBar, phaseProgressLabel, 0);
@@ -194,11 +200,11 @@
             const parsedElapsed = Number(attemptElapsed);
             const hasElapsed = Number.isFinite(parsedElapsed);
             if (hasTimeLimit && hasElapsed) {
-                lines.push(`Total ${formatSeconds(parsedTimeLimit)}`);
+                lines.push(`Quota ${formatSeconds(parsedTimeLimit)}`);
             } else if (hasElapsed) {
                 lines.push(`Elapsed ${formatSeconds(parsedElapsed)}`);
             } else if (hasTimeLimit) {
-                lines.push(`Total ${formatSeconds(parsedTimeLimit)}`);
+                lines.push(`Quota ${formatSeconds(parsedTimeLimit)}`);
             }
 
             const parsedBacktracks = Number(backtracks);
@@ -242,7 +248,8 @@
             if (!data) return;
             switch (data.type) {
                 case 'run_started':
-                    overlaySubtitle.textContent = `Total solver time quota: ${formatSeconds(data.total_allotment)}.`;
+                    overlaySubtitle.textContent = 'Preparing phases and estimating time requirements.';
+                    totalQuotaText.textContent = formatSeconds(data.total_allotment);
                     statusText.textContent = 'Solving…';
                     break;
                 case 'phase_started':
