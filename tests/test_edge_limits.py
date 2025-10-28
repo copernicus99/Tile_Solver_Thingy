@@ -1,4 +1,5 @@
 import unittest
+from typing import List, Optional
 
 from solver.backtracking_solver import BacktrackingSolver, SolverOptions
 from solver.models import SolveRequest, TileType
@@ -7,16 +8,29 @@ from solver.models import SolveRequest, TileType
 UNIT = 0.5
 
 
-def build_solver(width_cells: int, height_cells: int, limit: int, include_perimeter: bool = True) -> BacktrackingSolver:
+def build_solver(
+    width_cells: int,
+    height_cells: int,
+    limit: int,
+    include_perimeter: bool = True,
+    *,
+    allow_pop_outs: bool = False,
+    board_mask: Optional[List[List[bool]]] = None,
+) -> BacktrackingSolver:
     cell_tile = TileType("cell", UNIT, UNIT)
-    quantities = {cell_tile: width_cells * height_cells}
+    if board_mask is None:
+        total_cells = width_cells * height_cells
+    else:
+        total_cells = sum(1 for row in board_mask for cell in row if cell)
+    quantities = {cell_tile: total_cells}
     request = SolveRequest(
         tile_quantities=quantities,
         board_width_cells=width_cells,
         board_height_cells=height_cells,
         allow_rotation=True,
-        allow_pop_outs=False,
+        allow_pop_outs=allow_pop_outs,
         allow_discards=False,
+        board_mask=board_mask,
     )
     options = SolverOptions(
         max_edge_cells_horizontal=limit,
@@ -74,6 +88,29 @@ class EdgeLimitValidationTests(unittest.TestCase):
         ]
 
         self.assertTrue(solver._validate_edge_lengths())
+
+    def test_pop_out_mask_allows_extended_perimeter_runs(self):
+        width_cells = 10
+        height_cells = 2
+        limit = 6
+        mask: List[List[bool]] = [[True for _ in range(width_cells)] for _ in range(height_cells)]
+        mask[0][2] = False
+        mask[0][7] = False
+        mask[1][4] = False
+        mask[1][5] = False
+
+        solver = build_solver(
+            width_cells,
+            height_cells,
+            limit,
+            allow_pop_outs=True,
+            board_mask=mask,
+        )
+        result = solver.solve()
+        self.assertIsNotNone(result)
+
+        non_pop_out_solver = build_solver(width_cells, height_cells, limit)
+        self.assertIsNone(non_pop_out_solver.solve())
 
 
 if __name__ == "__main__":
