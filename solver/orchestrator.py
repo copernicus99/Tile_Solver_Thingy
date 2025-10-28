@@ -71,6 +71,7 @@ class TileSolverOrchestrator:
         total_area_ft = sum(tile.area_ft2 * qty for tile, qty in tile_quantities.items())
         if total_area_ft <= 0:
             raise ValueError("No tiles selected")
+        max_pop_out_depth = self._derive_pop_out_depth_limit(tile_quantities)
         phases = self._select_phases(total_area_ft)
         emit(
             "run_started",
@@ -93,7 +94,7 @@ class TileSolverOrchestrator:
         total_allotment = sum(
             phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
         )
-        candidate_boards = list(self._candidate_boards(total_area_ft))
+        candidate_boards = list(self._candidate_boards(total_area_ft, max_pop_out_depth))
         for phase_index, phase in enumerate(phases):
             phase_start = time.time()
             attempts: List[PhaseAttempt] = []
@@ -378,6 +379,21 @@ class TileSolverOrchestrator:
                 quantities[tile_type] = count
         return quantities
 
+    def _derive_pop_out_depth_limit(self, tile_quantities: Dict[TileType, int]) -> int:
+        longest_leg_ft = 0.0
+        for tile in tile_quantities.keys():
+            longest_leg_ft = max(longest_leg_ft, tile.width_ft, tile.height_ft)
+
+        if longest_leg_ft <= 0:
+            return max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+
+        depth_ft = longest_leg_ft - 1.0
+        if depth_ft <= 0:
+            return 0
+
+        depth_cells = int(math.floor(depth_ft / self.unit_ft + 1e-9))
+        return max(depth_cells, 0)
+
     def _phase_board_attempts(
         self, candidates: Sequence[BoardCandidate], allow_pop_outs: bool
     ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
@@ -389,7 +405,7 @@ class TileSolverOrchestrator:
             for index, mask in enumerate(candidate.pop_out_masks[:max_variants], start=1):
                 yield candidate.width, candidate.height, mask, index
 
-    def _candidate_boards(self, total_area_ft: float) -> List[BoardCandidate]:
+    def _candidate_boards(self, total_area_ft: float, max_pop_out_depth: int) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
 
@@ -424,13 +440,13 @@ class TileSolverOrchestrator:
         for reduction in range(6):
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
-            pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells)
+            pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells, max_pop_out_depth)
             boards.append(BoardCandidate(cells, cells, pop_out_masks))
 
         return boards
 
     def _generate_pop_out_masks(
-        self, width: int, height: int, target_cells: int
+        self, width: int, height: int, target_cells: int, max_depth: int
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
         slack = width * height - target_cells
         if slack <= 0:
@@ -440,7 +456,8 @@ class TileSolverOrchestrator:
         if max_variants <= 0:
             return ()
 
-        max_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        if max_depth <= 0:
+            return ()
         masks: List[Tuple[Tuple[bool, ...], ...]] = []
 
         def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:

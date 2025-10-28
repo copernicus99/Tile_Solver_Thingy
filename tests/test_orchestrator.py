@@ -18,7 +18,8 @@ class CandidateBoardTests(unittest.TestCase):
 
     def test_returns_six_boards_reducing_by_one_foot(self):
         total_area_ft = 30.0
-        candidates = self.orchestrator._candidate_boards(total_area_ft)
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
         expected = [
             (12, 12),
             (10, 10),
@@ -32,12 +33,14 @@ class CandidateBoardTests(unittest.TestCase):
     def test_clamps_minimum_board_size_to_one_foot(self):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
-        candidates = self.orchestrator._candidate_boards(total_area_ft)
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
     def test_small_fractional_area_pads_up_to_one_foot(self):
-        candidates = self.orchestrator._candidate_boards(0.3)
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        candidates = self.orchestrator._candidate_boards(0.3, default_depth)
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
@@ -46,9 +49,35 @@ class PopOutBoardTests(unittest.TestCase):
     def setUp(self):
         self.orchestrator = TileSolverOrchestrator()
 
+    def test_depth_limit_scales_with_longest_leg(self):
+        tile = self.orchestrator.tile_types["1.5x3"]
+        limit = self.orchestrator._derive_pop_out_depth_limit({tile: 1})
+        longest_leg = max(tile.width_ft, tile.height_ft)
+        expected = int(math.floor((longest_leg - 1.0) / self.orchestrator.unit_ft + 1e-9))
+        self.assertEqual(expected, limit)
+
+    def test_depth_limit_zero_when_tiles_are_one_foot(self):
+        tile = self.orchestrator.tile_types["1x1"]
+        limit = self.orchestrator._derive_pop_out_depth_limit({tile: 4})
+        self.assertEqual(0, limit)
+
+    def test_solve_passes_dynamic_depth_to_candidate_boards(self):
+        tile_name = "1.5x3"
+        tile = self.orchestrator.tile_types[tile_name]
+        expected_depth = self.orchestrator._derive_pop_out_depth_limit({tile: 1})
+
+        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[]) as mock_boards:
+            self.orchestrator.solve({tile_name: 1})
+
+        mock_boards.assert_called()
+        args = mock_boards.call_args[0]
+        self.assertGreaterEqual(len(args), 2)
+        self.assertEqual(expected_depth, args[1])
+
     def test_candidate_masks_preserve_target_area(self):
         total_area_ft = 30.0
-        candidates = self.orchestrator._candidate_boards(total_area_ft)
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
         self.assertTrue(candidates, "Expected at least one candidate board")
         first = candidates[0]
         self.assertTrue(first.pop_out_masks, "Pop-out masks should be generated when slack allows")
