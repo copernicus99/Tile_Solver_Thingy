@@ -112,11 +112,13 @@ class TileSolverOrchestrator:
                 phase_count=len(phases),
                 overall_elapsed=time.time() - overall_start,
             )
+            allow_overage = phase in (SETTINGS.PHASE_A, SETTINGS.PHASE_C)
             phase_candidates = list(
                 self._phase_board_attempts(
                     candidate_boards,
                     phase.allow_pop_outs,
                     phase.allow_discards,
+                    allow_overage_without_popouts=allow_overage,
                 )
             )
             total_attempts = len(phase_candidates)
@@ -405,6 +407,8 @@ class TileSolverOrchestrator:
         candidates: Sequence[BoardCandidate],
         allow_pop_outs: bool,
         allow_discards: bool,
+        *,
+        allow_overage_without_popouts: bool = False,
     ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         for candidate in candidates:
@@ -412,7 +416,11 @@ class TileSolverOrchestrator:
             target = candidate.target_cells
             if not allow_discards and board_area < target:
                 continue
-            if not allow_pop_outs and board_area > target:
+            if (
+                not allow_pop_outs
+                and board_area > target
+                and not allow_overage_without_popouts
+            ):
                 continue
             yield candidate.width, candidate.height, None, None
             if not allow_pop_outs or max_variants <= 0:

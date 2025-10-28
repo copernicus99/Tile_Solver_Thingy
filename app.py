@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -40,23 +41,59 @@ PHASE_CONFIGS = {
 }
 
 class RunLogWriter:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, selection: Optional[Dict[str, int]] = None):
         self.path = path
         self._lock = threading.Lock()
         self._summary_written = False
         SETTINGS.LOG_DIR.mkdir(parents=True, exist_ok=True)
-        header = [
-            "TILE SOLVER RUN LOG",
-            f"MAX_EDGE_FT={SETTINGS.MAX_EDGE_FT}",
-            f"PLUS_TOGGLE={SETTINGS.PLUS_TOGGLE}",
-            f"SAME_SHAPE_LIMIT={SETTINGS.SAME_SHAPE_LIMIT}",
-            "",
-            "Events:",
-        ]
+        header = self._build_header(selection)
         with self._lock:
             with self.path.open("w", encoding="utf-8") as fh:
                 for line in header:
                     fh.write(f"{line}\n")
+
+    def _build_header(self, selection: Optional[Dict[str, int]]) -> List[str]:
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        header: List[str] = [
+            "TILE SOLVER RUN LOG",
+            f"Generated at: {timestamp}",
+            f"MAX_EDGE_FT={SETTINGS.MAX_EDGE_FT}",
+            f"PLUS_TOGGLE={SETTINGS.PLUS_TOGGLE}",
+            f"SAME_SHAPE_LIMIT={SETTINGS.SAME_SHAPE_LIMIT}",
+        ]
+        header.extend(self._selection_lines(selection))
+        header.extend(["", "Events:"])
+        return header
+
+    def _selection_lines(self, selection: Optional[Dict[str, int]]) -> List[str]:
+        if not selection:
+            return ["Tile counts: none selected"]
+
+        lines: List[str] = ["Tile counts:"]
+        total_tiles = 0
+        total_area = 0.0
+        for tile_name, dims in SETTINGS.TILE_OPTIONS.items():
+            count = int(selection.get(tile_name, 0))
+            if count <= 0:
+                continue
+            width_ft, height_ft = dims
+            lines.append(
+                "  - {name}: {count} ({width:.1f}ft × {height:.1f}ft)".format(
+                    name=tile_name,
+                    count=count,
+                    width=width_ft,
+                    height=height_ft,
+                )
+            )
+            total_tiles += count
+            total_area += width_ft * height_ft * count
+
+        if total_tiles == 0:
+            return ["Tile counts: none selected"]
+
+        lines.append(f"  Total tiles: {total_tiles}")
+        lines.append(f"  Total coverage: {total_area:.2f} ft²")
+        return lines
 
     def handle_event(self, event: Dict[str, object]) -> None:
         event_type = event.get("type")
@@ -218,7 +255,7 @@ class RunManager:
     def start_run(self, selection: Dict[str, int]) -> str:
         run_id = uuid.uuid4().hex
         log_path = SETTINGS.LOG_DIR / "run_log.txt"
-        log_writer = RunLogWriter(log_path)
+        log_writer = RunLogWriter(log_path, selection)
         state = RunState(
             queue.Queue(),
             selection=dict(selection),
@@ -295,7 +332,7 @@ def solve_tiles():
     selection = _parse_selection(request.form)
     selection_summary = _selection_summary(selection)
     log_path = SETTINGS.LOG_DIR / "run_log.txt"
-    log_writer = RunLogWriter(log_path)
+    log_writer = RunLogWriter(log_path, selection)
 
     def progress(event: Dict[str, object]) -> None:
         log_writer.handle_event(event)

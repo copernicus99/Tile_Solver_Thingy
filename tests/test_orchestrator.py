@@ -45,6 +45,62 @@ class CandidateBoardTests(unittest.TestCase):
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
 
+class PhaseBoardAttemptTests(unittest.TestCase):
+    def setUp(self):
+        self.orchestrator = TileSolverOrchestrator()
+
+    def test_non_pop_out_phases_skip_oversized_boards_by_default(self):
+        candidate = BoardCandidate(width=10, height=10, target_cells=80, pop_out_masks=())
+        attempts = list(
+            self.orchestrator._phase_board_attempts(
+                [candidate],
+                allow_pop_outs=False,
+                allow_discards=False,
+            )
+        )
+        self.assertFalse(attempts, "Oversized boards should be skipped when overage is disallowed")
+
+    def test_phases_a_and_c_allow_oversized_boards_without_pop_outs(self):
+        candidate = BoardCandidate(width=10, height=10, target_cells=80, pop_out_masks=())
+        attempts = list(
+            self.orchestrator._phase_board_attempts(
+                [candidate],
+                allow_pop_outs=False,
+                allow_discards=False,
+                allow_overage_without_popouts=True,
+            )
+        )
+        self.assertEqual(
+            [(candidate.width, candidate.height, None, None)],
+            attempts,
+            "Oversized boards should be attempted when overage is allowed",
+        )
+
+    def test_solve_marks_phases_a_and_c_for_oversized_board_attempts(self):
+        orchestrator = self.orchestrator
+        selection = {"1x1": 4}
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_phase_board_attempts",
+            autospec=True,
+            return_value=[],
+        ) as patched:
+            orchestrator.solve(selection)
+
+        self.assertGreaterEqual(len(patched.call_args_list), 2)
+        phase_a_args = patched.call_args_list[0].kwargs
+        self.assertTrue(
+            phase_a_args.get("allow_overage_without_popouts"),
+            "Phase A should allow oversized boards without pop-outs",
+        )
+        phase_b_args = patched.call_args_list[1].kwargs
+        self.assertFalse(
+            phase_b_args.get("allow_overage_without_popouts"),
+            "Phase B should not allow oversized boards without pop-outs",
+        )
+
+
 class PopOutBoardTests(unittest.TestCase):
     def setUp(self):
         self.orchestrator = TileSolverOrchestrator()
