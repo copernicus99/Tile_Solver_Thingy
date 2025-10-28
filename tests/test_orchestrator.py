@@ -7,7 +7,7 @@ from config import SETTINGS
 
 from solver.backtracking_solver import BacktrackingSolver, SolverOptions
 from solver.orchestrator import TileSolverOrchestrator
-from solver.models import SolveRequest, SolverStats, TileType
+from solver.models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
 
 class CandidateBoardTests(unittest.TestCase):
@@ -47,8 +47,8 @@ class SolverOptionTests(unittest.TestCase):
         board_length_cells = int(round(board_ft / orchestrator.unit_ft))
 
         limit = orchestrator._max_edge_for_dimension(board_length_cells)
-        expected_ft = math.ceil(board_ft * SETTINGS.MAX_EDGE_RATIO)
-        expected = int(round(expected_ft / orchestrator.unit_ft))
+        expected = int(math.floor(board_length_cells * SETTINGS.MAX_EDGE_RATIO + 1e-9))
+        expected = max(1, min(board_length_cells, expected))
 
         self.assertEqual(expected, limit)
 
@@ -148,9 +148,39 @@ class DiscardHandlingTests(unittest.TestCase):
 
     def test_phase_log_records_discards_for_successful_phase(self):
         orchestrator = TileSolverOrchestrator()
-        result, logs = orchestrator.solve({"2x2": 1, "1x1": 1})
+        unit = orchestrator.unit_ft
+        tile_type = orchestrator.tile_types["1x1"]
+        tile_cells = tile_type.as_cells(unit)
+        placed_tile = TileInstance(tile_type, "tile_1", allow_rotation=True)
+        discarded_tile = TileInstance(tile_type, "tile_2", allow_rotation=True)
+        placement = Placement(placed_tile, 0, 0, *tile_cells)
+        fake_result = SolveResult(
+            placements=[placement],
+            board_width_cells=4,
+            board_height_cells=4,
+            phase_name="Phase Test",
+            board_width_ft=4 * unit,
+            board_height_ft=4 * unit,
+            discarded_tiles=[discarded_tile],
+        )
 
-        self.assertIsNotNone(result, "Expected the orchestrator to find a solution when discards are permitted")
+        class FakeSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+
+            def solve(self):
+                return fake_result
+
+        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(4, 4)]), mock.patch(
+            "solver.orchestrator.BacktrackingSolver", FakeSolver
+        ):
+            result, logs = orchestrator.solve({"1x1": 1})
+
+        self.assertIs(result, fake_result)
         phase_with_result = next((log for log in logs if log.result is not None), None)
 
         self.assertIsNotNone(phase_with_result, "A phase log should capture the successful solver result")

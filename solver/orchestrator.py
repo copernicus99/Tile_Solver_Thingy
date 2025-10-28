@@ -299,11 +299,11 @@ class TileSolverOrchestrator:
 
         ratio = getattr(SETTINGS, "MAX_EDGE_RATIO", None)
         if ratio is not None and ratio > 0:
-            length_ft = length_cells * self.unit_ft
-            ratio_limit_ft = math.ceil(length_ft * ratio)
-            if ratio_limit_ft > 0:
-                ratio_limit_cells = int(round(ratio_limit_ft / self.unit_ft))
-                ratio_limit_cells = max(1, min(length_cells, ratio_limit_cells))
+            ratio_limit_cells = int(math.floor(length_cells * ratio + 1e-9))
+            if length_cells > 0 and ratio_limit_cells <= 0:
+                ratio_limit_cells = 1
+            if ratio_limit_cells > 0:
+                ratio_limit_cells = min(length_cells, ratio_limit_cells)
                 limits.append(ratio_limit_cells)
 
         absolute_ft = getattr(SETTINGS, "MAX_EDGE_FT", 0.0)
