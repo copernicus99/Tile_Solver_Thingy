@@ -40,6 +40,8 @@ class BacktrackingSolver:
         self.grid: List[List[int]] = [[-1 for _ in range(self.width)] for _ in range(self.height)]
         self.tiles: List[TileInstance] = []
         self.placements: Dict[int, Placement] = {}
+        self._mask_value = -2
+        self._pop_out_mask = request.pop_out_mask or frozenset()
         self.stats = SolverStats()
         self._start_time = 0.0
         self._last_progress_report = 0.0
@@ -48,6 +50,7 @@ class BacktrackingSolver:
         self._height_cache: Dict[Tuple[frozenset[int], int], bool] = {}
         self._progress_callback = progress_callback
         self._build_tiles()
+        self._apply_pop_out_mask()
 
     def _build_tiles(self) -> None:
         for tile_type, qty in self.request.tile_quantities.items():
@@ -58,6 +61,13 @@ class BacktrackingSolver:
                 self.tiles.append(tile)
         self._tile_order = sorted(range(len(self.tiles)), key=lambda idx: self._tile_shapes[idx].area_ft2, reverse=True)
         self._used = [False] * len(self.tiles)
+
+    def _apply_pop_out_mask(self) -> None:
+        if not self._pop_out_mask:
+            return
+        for x, y in self._pop_out_mask:
+            if 0 <= x < self.width and 0 <= y < self.height:
+                self.grid[y][x] = self._mask_value
 
     def solve(self) -> Optional[SolveResult]:
         if not self.tiles:

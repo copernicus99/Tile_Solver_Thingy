@@ -45,6 +45,9 @@ class Settings:
     MAX_EDGE_INSIDE_ONLY = False
     PLUS_TOGGLE = True
     SAME_SHAPE_LIMIT = 1
+    POP_OUT_VARIATIONS_PER_BOARD = 3
+    POP_OUT_MAX_NOTCH_DEPTH = 2
+    POP_OUT_MAX_NOTCH_SPAN = 2
 
     PHASE_A = PhaseConfig(
         "Phase A",

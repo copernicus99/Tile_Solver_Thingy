@@ -17,6 +17,7 @@ def build_solver(width_cells: int, height_cells: int, limit: int, include_perime
         allow_rotation=True,
         allow_pop_outs=False,
         allow_discards=False,
+        pop_out_mask=None,
     )
     options = SolverOptions(
         max_edge_cells_horizontal=limit,

@@ -28,6 +28,13 @@ class PhaseLog:
     result: Optional[SolveResult]
 
 
+@dataclass(frozen=True)
+class BoardCandidate:
+    width_cells: int
+    height_cells: int
+    pop_out_mask: Optional[frozenset[Tuple[int, int]]]
+
+
 class TileSolverOrchestrator:
     def __init__(self) -> None:
         self.unit_ft = SETTINGS.GRID_UNIT_FT
@@ -88,8 +95,16 @@ class TileSolverOrchestrator:
                 phase_count=len(phases),
                 overall_elapsed=time.time() - overall_start,
             )
-            total_attempts = len(candidate_boards)
-            for attempt_index, (board_w, board_h) in enumerate(candidate_boards, start=1):
+            phase_candidates = [
+                board
+                for board in candidate_boards
+                if phase.allow_pop_outs or board.pop_out_mask is None
+            ]
+            total_attempts = len(phase_candidates)
+            for attempt_index, candidate in enumerate(phase_candidates, start=1):
+                board_w = candidate.width_cells
+                board_h = candidate.height_cells
+                mask = candidate.pop_out_mask if phase.allow_pop_outs else None
                 phase_limit = phase.time_limit_sec
                 if phase_limit is not None:
                     elapsed_before_attempt = time.time() - phase_start
@@ -114,6 +129,7 @@ class TileSolverOrchestrator:
                     allow_rotation=phase.allow_rotation,
                     allow_pop_outs=phase.allow_pop_outs,
                     allow_discards=phase.allow_discards,
+                    pop_out_mask=mask,
                 )
                 options = SolverOptions(
                     max_edge_cells_horizontal=self._max_edge_for_dimension(board_w),
@@ -175,6 +191,7 @@ class TileSolverOrchestrator:
                     total_attempts=total_attempts,
                     board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                     board_size_cells=(board_w, board_h),
+                    pop_out_mask_cells=len(mask) if mask else 0,
                     phase_index=phase_index,
                     time_limit_sec=attempt_limit_value,
                     overall_elapsed=time.time() - overall_start,
@@ -218,6 +235,7 @@ class TileSolverOrchestrator:
                     total_attempts=total_attempts,
                     board_size_ft=(board_w * self.unit_ft, board_h * self.unit_ft),
                     board_size_cells=(board_w, board_h),
+                    pop_out_mask_cells=len(mask) if mask else 0,
                     elapsed=elapsed,
                     success=solve_result is not None,
                     backtracks=solver.stats.backtracks,
@@ -334,7 +352,7 @@ class TileSolverOrchestrator:
                 quantities[tile_type] = count
         return quantities
 
-    def _candidate_boards(self, total_area_ft: float) -> List[Tuple[int, int]]:
+    def _candidate_boards(self, total_area_ft: float) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
 
@@ -365,13 +383,133 @@ class TileSolverOrchestrator:
                 )
             return rounded
 
-        boards: List[Tuple[int, int]] = []
+        boards: List[BoardCandidate] = []
         for reduction in range(6):
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
-            boards.append((cells, cells))
+            boards.append(BoardCandidate(cells, cells, None))
+            for mask in self._pop_out_masks(cells, cells, area_cells):
+                boards.append(BoardCandidate(cells, cells, mask))
 
         return boards
+
+    def _pop_out_masks(
+        self, width_cells: int, height_cells: int, required_cells: int
+    ) -> Iterable[frozenset[Tuple[int, int]]]:
+        extra_capacity = width_cells * height_cells - required_cells
+        if extra_capacity <= 0:
+            return []
+
+        max_variations = getattr(SETTINGS, "POP_OUT_VARIATIONS_PER_BOARD", 0)
+        if max_variations <= 0:
+            return []
+
+        max_depth = getattr(SETTINGS, "POP_OUT_MAX_NOTCH_DEPTH", 0)
+        span_limit = getattr(SETTINGS, "POP_OUT_MAX_NOTCH_SPAN", 0)
+        if max_depth <= 0 or span_limit <= 0:
+            return []
+
+        masks: List[frozenset[Tuple[int, int]]] = []
+        for variant in range(max_variations):
+            mask = self._generate_pop_out_mask(
+                width_cells,
+                height_cells,
+                extra_capacity,
+                max_depth,
+                span_limit,
+                variant,
+            )
+            if mask:
+                masks.append(frozenset(mask))
+        return masks
+
+    def _generate_pop_out_mask(
+        self,
+        width_cells: int,
+        height_cells: int,
+        target_cells: int,
+        max_depth: int,
+        span_limit: int,
+        variant: int,
+    ) -> Optional[set[Tuple[int, int]]]:
+        if target_cells <= 0:
+            return None
+        mask: set[Tuple[int, int]] = set()
+        corners = ("top_left", "top_right", "bottom_left", "bottom_right")
+        start_index = variant % len(corners)
+        base_offset = (variant // len(corners)) * span_limit
+        offsets = [base_offset for _ in range(len(corners))]
+        remaining = target_cells
+        passes = 0
+        while remaining > 0 and passes < (width_cells + height_cells):
+            for step in range(len(corners)):
+                corner_index = (start_index + step) % len(corners)
+                corner = corners[corner_index]
+                offset = offsets[corner_index]
+                removed = self._carve_corner_notch(
+                    corner,
+                    offset,
+                    width_cells,
+                    height_cells,
+                    remaining,
+                    max_depth,
+                    span_limit,
+                    mask,
+                )
+                offsets[corner_index] += span_limit
+                remaining -= removed
+                if remaining <= 0:
+                    break
+            passes += 1
+        if remaining > 0:
+            return None
+        return mask
+
+    def _carve_corner_notch(
+        self,
+        corner: str,
+        offset: int,
+        width_cells: int,
+        height_cells: int,
+        remaining: int,
+        max_depth: int,
+        span_limit: int,
+        mask: set[Tuple[int, int]],
+    ) -> int:
+        removed = 0
+        if corner == "top_left":
+            x_fn = lambda span: offset + span
+            y_fn = lambda depth: depth
+        elif corner == "top_right":
+            x_fn = lambda span: width_cells - 1 - (offset + span)
+            y_fn = lambda depth: depth
+        elif corner == "bottom_left":
+            x_fn = lambda span: offset + span
+            y_fn = lambda depth: height_cells - 1 - depth
+        elif corner == "bottom_right":
+            x_fn = lambda span: width_cells - 1 - (offset + span)
+            y_fn = lambda depth: height_cells - 1 - depth
+        else:
+            return 0
+
+        for depth in range(max_depth):
+            y = y_fn(depth)
+            if y < 0 or y >= height_cells:
+                break
+            for span in range(span_limit):
+                if removed >= remaining:
+                    break
+                x = x_fn(span)
+                if x < 0 or x >= width_cells:
+                    break
+                cell = (x, y)
+                if cell in mask:
+                    continue
+                mask.add(cell)
+                removed += 1
+            if removed >= remaining:
+                break
+        return removed
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]

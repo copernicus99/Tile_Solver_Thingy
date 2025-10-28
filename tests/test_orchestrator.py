@@ -3,10 +3,10 @@ import unittest
 from collections import OrderedDict
 from unittest import mock
 
-from config import SETTINGS
+from config import SETTINGS, PhaseConfig
 
 from solver.backtracking_solver import BacktrackingSolver, SolverOptions
-from solver.orchestrator import TileSolverOrchestrator
+from solver.orchestrator import BoardCandidate, TileSolverOrchestrator
 from solver.models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
 
@@ -17,6 +17,11 @@ class CandidateBoardTests(unittest.TestCase):
     def test_returns_six_boards_reducing_by_one_foot(self):
         total_area_ft = 30.0
         candidates = self.orchestrator._candidate_boards(total_area_ft)
+        unmasked = [
+            (candidate.width_cells, candidate.height_cells)
+            for candidate in candidates
+            if candidate.pop_out_mask is None
+        ][:6]
         expected = [
             (12, 12),
             (10, 10),
@@ -25,19 +30,29 @@ class CandidateBoardTests(unittest.TestCase):
             (4, 4),
             (2, 2),
         ]
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, unmasked)
 
     def test_clamps_minimum_board_size_to_one_foot(self):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
         candidates = self.orchestrator._candidate_boards(total_area_ft)
+        unmasked = [
+            (candidate.width_cells, candidate.height_cells)
+            for candidate in candidates
+            if candidate.pop_out_mask is None
+        ]
         expected = [(2, 2)] * 6
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, unmasked)
 
     def test_small_fractional_area_pads_up_to_one_foot(self):
         candidates = self.orchestrator._candidate_boards(0.3)
+        unmasked = [
+            (candidate.width_cells, candidate.height_cells)
+            for candidate in candidates
+            if candidate.pop_out_mask is None
+        ]
         expected = [(2, 2)] * 6
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, unmasked)
 
 
 class SolverOptionTests(unittest.TestCase):
@@ -77,7 +92,11 @@ class SolverOptionTests(unittest.TestCase):
             def solve(self):
                 return None
 
-        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(14, 14)]), mock.patch(
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_candidate_boards",
+            return_value=[BoardCandidate(14, 14, None)],
+        ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
             orchestrator.solve({"1x1": 1})
@@ -119,6 +138,7 @@ class DiscardHandlingTests(unittest.TestCase):
             allow_rotation=True,
             allow_pop_outs=False,
             allow_discards=allow_discards,
+            pop_out_mask=None,
         )
 
     def test_solver_requires_all_tiles_when_discards_disallowed(self):
@@ -175,7 +195,11 @@ class DiscardHandlingTests(unittest.TestCase):
             def solve(self):
                 return fake_result
 
-        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(4, 4)]), mock.patch(
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_candidate_boards",
+            return_value=[BoardCandidate(4, 4, None)],
+        ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
             result, logs = orchestrator.solve({"1x1": 1})
@@ -191,6 +215,126 @@ class DiscardHandlingTests(unittest.TestCase):
             [tile.identifier for tile in phase_with_result.result.discarded_tiles],
         )
 
+
+class PopOutIntegrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.orchestrator = TileSolverOrchestrator()
+
+    def test_phase_b_attempts_masked_board(self):
+        captured = []
+
+        class FakeSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+                captured.append(self)
+
+            def solve(self):
+                return None
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_pop_out_masks",
+            return_value=[frozenset({(0, 0)})],
+        ), mock.patch("solver.orchestrator.BacktrackingSolver", FakeSolver):
+            self.orchestrator.solve({"1x1": 4})
+
+        phase_b_requests = [
+            solver.request
+            for solver in captured
+            if solver.phase_name == SETTINGS.PHASE_B.name
+        ]
+        self.assertTrue(phase_b_requests, "Phase B should attempt at least one board")
+        self.assertTrue(
+            any(request.pop_out_mask for request in phase_b_requests),
+            "Phase B should explore at least one masked board when pop-outs are enabled.",
+        )
+
+    def test_phase_d_attempts_masked_board(self):
+        captured = []
+
+        class FakeSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+                captured.append(self)
+
+            def solve(self):
+                return None
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_pop_out_masks",
+            return_value=[frozenset({(0, 0)})],
+        ), mock.patch("solver.orchestrator.BacktrackingSolver", FakeSolver):
+            self.orchestrator.solve({"1x1": 400})
+
+        phase_d_requests = [
+            solver.request
+            for solver in captured
+            if solver.phase_name == SETTINGS.PHASE_D.name
+        ]
+        self.assertTrue(phase_d_requests, "Phase D should attempt at least one board")
+        self.assertTrue(
+            any(request.pop_out_mask for request in phase_d_requests),
+            "Phase D should explore at least one masked board when pop-outs are enabled.",
+        )
+
+    def test_disabling_pop_outs_avoids_masks(self):
+        captured = []
+
+        class FakeSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+                captured.append(self)
+
+            def solve(self):
+                return None
+
+        original_b = SETTINGS.PHASE_B
+        original_d = SETTINGS.PHASE_D
+        self.addCleanup(setattr, SETTINGS, "PHASE_B", original_b)
+        self.addCleanup(setattr, SETTINGS, "PHASE_D", original_d)
+        SETTINGS.PHASE_B = PhaseConfig(
+            name=original_b.name,
+            allow_rotation=original_b.allow_rotation,
+            allow_discards=original_b.allow_discards,
+            allow_pop_outs=False,
+            time_limit_sec=original_b.time_limit_sec,
+            first_board_time_share=original_b.first_board_time_share,
+        )
+        SETTINGS.PHASE_D = PhaseConfig(
+            name=original_d.name,
+            allow_rotation=original_d.allow_rotation,
+            allow_discards=original_d.allow_discards,
+            allow_pop_outs=False,
+            time_limit_sec=original_d.time_limit_sec,
+            first_board_time_share=original_d.first_board_time_share,
+        )
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_pop_out_masks",
+            return_value=[frozenset({(0, 0)})],
+        ), mock.patch("solver.orchestrator.BacktrackingSolver", FakeSolver):
+            self.orchestrator.solve({"1x1": 4})
+            self.orchestrator.solve({"1x1": 400})
+
+        self.assertTrue(captured, "Solver should have been invoked during the runs")
+        self.assertFalse(
+            any(solver.request.pop_out_mask for solver in captured),
+            "No attempts should use masked boards when pop-outs are disabled for all phases.",
+        )
 
 if __name__ == "__main__":
     unittest.main()
