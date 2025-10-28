@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from config import SETTINGS, PhaseConfig
 try:  # pragma: no cover - prefer package-relative import
@@ -56,6 +56,7 @@ class TileSolverOrchestrator:
         self.tile_types = {
             name: TileType(name, dims[0], dims[1]) for name, dims in SETTINGS.TILE_OPTIONS.items()
         }
+        self._min_tile_edge_cells = self._compute_min_tile_edge()
 
     def solve(
         self,
@@ -462,18 +463,7 @@ class TileSolverOrchestrator:
     def _generate_pop_out_masks(
         self, width: int, height: int, target_cells: int, max_depth: int
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
-        slack = width * height - target_cells
-        if slack <= 0:
-            # When the requested tile coverage exceeds the base board area we still
-            # want to explore pop-out variants. Fallback to removing a mirrored pair
-            # of notches so that downstream code can construct up to the configured
-            # number of masks for the board. To keep the mirrored requirement intact
-            # we only consider even slack values that can be split across opposite
-            # sides of the board.
-            fallback = min(width, height)
-            if fallback % 2 != 0:
-                fallback -= 1
-            slack = max(fallback, 0)
+        slack = self._resolve_slack_for_mask(width, height, target_cells, max_depth)
         if slack <= 0:
             return ()
 
@@ -484,44 +474,24 @@ class TileSolverOrchestrator:
         if max_depth <= 0:
             return ()
         masks: List[Tuple[Tuple[bool, ...], ...]] = []
+        seen: Set[Tuple[Tuple[bool, ...], ...]] = set()
 
         def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:
             if len(masks) >= max_variants:
                 return
-            mask = [[True for _ in range(width)] for _ in range(height)]
-            removed = 0
-            for orientation, depth, length in notches:
-                if orientation in ("top", "bottom"):
-                    if depth > height:
-                        return
-                    if length > width:
-                        return
-                    for offset in range(depth):
-                        row_idx = offset if orientation == "top" else height - 1 - offset
-                        for col in range(length):
-                            col_idx = col if orientation == "top" else width - 1 - col
-                            if not mask[row_idx][col_idx]:
-                                return
-                            mask[row_idx][col_idx] = False
-                            removed += 1
-                else:
-                    if depth > width:
-                        return
-                    if length > height:
-                        return
-                    for offset in range(depth):
-                        col_idx = offset if orientation == "left" else width - 1 - offset
-                        for row in range(length):
-                            row_idx = row if orientation == "left" else height - 1 - row
-                            if not mask[row_idx][col_idx]:
-                                return
-                            mask[row_idx][col_idx] = False
-                            removed += 1
+            if not self._has_mirrored_notch(notches):
+                return
+            rendered = self._render_mask_from_notches(width, height, notches)
+            if rendered is None:
+                return
+            mask_tuple, removed = rendered
             if removed != slack:
                 return
-            masks.append(tuple(tuple(row) for row in mask))
+            if mask_tuple in seen:
+                return
+            seen.add(mask_tuple)
+            masks.append(mask_tuple)
 
-        orientations = ("top", "bottom", "left", "right")
         orientation_dims = {
             "top": width,
             "bottom": width,
@@ -575,6 +545,78 @@ class TileSolverOrchestrator:
                     return tuple(masks)
 
         return tuple(masks)
+
+    def _render_mask_from_notches(
+        self, width: int, height: int, notches: Sequence[Tuple[str, int, int]]
+    ) -> Optional[Tuple[Tuple[Tuple[bool, ...], ...], int]]:
+        mask = [[True for _ in range(width)] for _ in range(height)]
+        removed = 0
+        for orientation, depth, length in notches:
+            if orientation in ("top", "bottom"):
+                if depth > height or length > width:
+                    return None
+                for offset in range(depth):
+                    row_idx = offset if orientation == "top" else height - 1 - offset
+                    for col in range(length):
+                        col_idx = col if orientation == "top" else width - 1 - col
+                        if not mask[row_idx][col_idx]:
+                            return None
+                        mask[row_idx][col_idx] = False
+                        removed += 1
+            else:
+                if depth > width or length > height:
+                    return None
+                for offset in range(depth):
+                    col_idx = offset if orientation == "left" else width - 1 - offset
+                    for row in range(length):
+                        row_idx = row if orientation == "left" else height - 1 - row
+                        if not mask[row_idx][col_idx]:
+                            return None
+                        mask[row_idx][col_idx] = False
+                        removed += 1
+        return tuple(tuple(row) for row in mask), removed
+
+    @staticmethod
+    def _has_mirrored_notch(notches: Sequence[Tuple[str, int, int]]) -> bool:
+        orientations = {orientation for orientation, _, _ in notches}
+        return (
+            {"top", "bottom"}.issubset(orientations)
+            or {"left", "right"}.issubset(orientations)
+        )
+
+    def _compute_min_tile_edge(self) -> int:
+        edge_lengths: List[int] = []
+        for tile in self.tile_types.values():
+            width_cells, height_cells = tile.as_cells(self.unit_ft)
+            edge_lengths.append(width_cells)
+            edge_lengths.append(height_cells)
+        edge_lengths = [edge for edge in edge_lengths if edge > 0]
+        if not edge_lengths:
+            return 0
+        return min(edge_lengths)
+
+    def _minimum_mask_span(self, width: int, height: int) -> int:
+        if self._min_tile_edge_cells <= 0:
+            return 0
+        orientation_lengths = []
+        if width > 0 and height > 0:
+            orientation_lengths.append(min(self._min_tile_edge_cells, width))
+            orientation_lengths.append(min(self._min_tile_edge_cells, height))
+        orientation_lengths = [length for length in orientation_lengths if length > 0]
+        if not orientation_lengths:
+            return 0
+        length = max(1, min(orientation_lengths))
+        return 2 * length
+
+    def _resolve_slack_for_mask(
+        self, width: int, height: int, target_cells: int, max_depth: int
+    ) -> int:
+        slack = width * height - target_cells
+        if slack > 0:
+            return slack
+        if max_depth <= 0:
+            return 0
+        return self._minimum_mask_span(width, height)
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt", "BoardCandidate"]
