@@ -1,5 +1,8 @@
+import math
 import unittest
 from unittest import mock
+
+from config import SETTINGS
 
 from solver.orchestrator import TileSolverOrchestrator
 from solver.models import SolverStats
@@ -36,6 +39,26 @@ class CandidateBoardTests(unittest.TestCase):
 
 
 class SolverOptionTests(unittest.TestCase):
+    def test_max_edge_limit_scales_with_board_size(self):
+        orchestrator = TileSolverOrchestrator()
+        board_ft = 8
+        board_length_cells = int(round(board_ft / orchestrator.unit_ft))
+
+        limit = orchestrator._max_edge_for_dimension(board_length_cells)
+        expected_ft = math.ceil(board_ft * SETTINGS.MAX_EDGE_RATIO)
+        expected = int(round(expected_ft / orchestrator.unit_ft))
+
+        self.assertEqual(expected, limit)
+
+    def test_absolute_cap_still_limits_large_boards(self):
+        orchestrator = TileSolverOrchestrator()
+        board_length_cells = int(round(12 / orchestrator.unit_ft))
+
+        limit = orchestrator._max_edge_for_dimension(board_length_cells)
+        expected = int(round(SETTINGS.MAX_EDGE_FT / orchestrator.unit_ft))
+
+        self.assertEqual(expected, limit)
+
     def test_perimeter_edges_are_included_in_straight_edge_limit(self):
         orchestrator = TileSolverOrchestrator()
         captured_options = []
