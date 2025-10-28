@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - allow running as a script
 class BoardCandidate:
     width: int
     height: int
+    target_cells: int
     pop_out_masks: Tuple[Tuple[Tuple[bool, ...], ...], ...]
 
 
@@ -111,7 +112,11 @@ class TileSolverOrchestrator:
                 overall_elapsed=time.time() - overall_start,
             )
             phase_candidates = list(
-                self._phase_board_attempts(candidate_boards, phase.allow_pop_outs)
+                self._phase_board_attempts(
+                    candidate_boards,
+                    phase.allow_pop_outs,
+                    phase.allow_discards,
+                )
             )
             total_attempts = len(phase_candidates)
             for attempt_index, (board_w, board_h, mask, mask_index) in enumerate(
@@ -395,10 +400,19 @@ class TileSolverOrchestrator:
         return max(depth_cells, 0)
 
     def _phase_board_attempts(
-        self, candidates: Sequence[BoardCandidate], allow_pop_outs: bool
+        self,
+        candidates: Sequence[BoardCandidate],
+        allow_pop_outs: bool,
+        allow_discards: bool,
     ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         for candidate in candidates:
+            board_area = candidate.width * candidate.height
+            target = candidate.target_cells
+            if not allow_discards and board_area < target:
+                continue
+            if not allow_pop_outs and board_area > target:
+                continue
             yield candidate.width, candidate.height, None, None
             if not allow_pop_outs or max_variants <= 0:
                 continue
@@ -441,7 +455,7 @@ class TileSolverOrchestrator:
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
             pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells, max_pop_out_depth)
-            boards.append(BoardCandidate(cells, cells, pop_out_masks))
+            boards.append(BoardCandidate(cells, cells, area_cells, pop_out_masks))
 
         return boards
 
