@@ -450,7 +450,11 @@ class TileSolverOrchestrator:
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
         slack = width * height - target_cells
         if slack <= 0:
-            return ()
+            # When the requested tile coverage exceeds the base board area we still
+            # want to explore pop-out variants. Fallback to removing a single strip
+            # of cells so that downstream code can construct up to the configured
+            # number of masks for the board.
+            slack = min(width, height)
 
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         if max_variants <= 0:
