@@ -428,47 +428,31 @@ class BacktrackingSolver:
         if max_horizontal > 0:
             for y in range(self.height + 1):
                 run = 0
-                current_boundary = None
                 for x in range(self.width):
                     upper = self.grid[y - 1][x] if y > 0 else -2
                     lower = self.grid[y][x] if y < self.height else -2
                     if upper == lower:
                         run = 0
-                        current_boundary = None
                         continue
                     if not include_perimeter and (upper == -2 or lower == -2):
                         run = 0
-                        current_boundary = None
                         continue
-                    boundary_key = (min(upper, lower), max(upper, lower))
-                    if boundary_key == current_boundary:
-                        run += 1
-                    else:
-                        run = 1
-                        current_boundary = boundary_key
+                    run += 1
                     if run > max_horizontal:
                         return False
         if max_vertical > 0:
             for x in range(self.width + 1):
                 run = 0
-                current_boundary = None
                 for y in range(self.height):
                     left = self.grid[y][x - 1] if x > 0 else -2
                     right = self.grid[y][x] if x < self.width else -2
                     if left == right:
                         run = 0
-                        current_boundary = None
                         continue
                     if not include_perimeter and (left == -2 or right == -2):
                         run = 0
-                        current_boundary = None
                         continue
-                    boundary_key = (min(left, right), max(left, right))
-                    if boundary_key == current_boundary:
-                        run += 1
-                    else:
-                        run = 1
-                        current_boundary = boundary_key
+                    run += 1
                     if run > max_vertical:
                         return False
         return True
