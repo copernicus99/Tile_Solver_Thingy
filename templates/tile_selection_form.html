@@ -173,6 +173,7 @@
 
         function buildAttemptDisplay({
             boardLabel,
+            variantLabel,
             attemptIndex,
             totalAttempts,
             timeLimitSec,
@@ -181,10 +182,14 @@
         }) {
             const lines = [];
             if (boardLabel) {
+                const labelParts = [boardLabel];
+                if (variantLabel) {
+                    labelParts.push(variantLabel);
+                }
                 const attemptCount = typeof totalAttempts === 'number'
                     ? `${attemptIndex} of ${totalAttempts}`
                     : `Attempt ${attemptIndex}`;
-                lines.push(`${boardLabel} (${attemptCount})`);
+                lines.push(`${labelParts.join(' — ')} (${attemptCount})`);
             }
 
             const parsedTimeLimit = Number(timeLimitSec);
@@ -214,6 +219,21 @@
             return `${size[0].toFixed(1)} ft × ${size[1].toFixed(1)} ft`;
         }
 
+        function updateGridDisplay(boardLabel, variantLabel) {
+            if (!gridText) {
+                return;
+            }
+            if (!boardLabel || boardLabel === '—') {
+                gridText.textContent = '—';
+                return;
+            }
+            if (variantLabel) {
+                gridText.innerHTML = `${boardLabel}<br><span class="grid-variant">${variantLabel}</span>`;
+            } else {
+                gridText.textContent = boardLabel;
+            }
+        }
+
         function closeEventSource() {
             if (currentEventSource) {
                 currentEventSource.close();
@@ -240,9 +260,10 @@
                     break;
                 case 'attempt_started':
                     const boardLabel = formatBoardSize(data.board_size_ft);
-                    gridText.textContent = boardLabel;
+                    updateGridDisplay(boardLabel, data.variant_label);
                     attemptText.textContent = buildAttemptDisplay({
                         boardLabel,
+                        variantLabel: data.variant_label,
                         attemptIndex: data.attempt_index,
                         totalAttempts: data.total_attempts,
                         timeLimitSec: data.time_limit_sec,
@@ -258,9 +279,10 @@
                 case 'attempt_completed':
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabelCompleted = formatBoardSize(data.board_size_ft);
-                        gridText.textContent = boardLabelCompleted;
+                        updateGridDisplay(boardLabelCompleted, data.variant_label);
                         attemptText.textContent = buildAttemptDisplay({
                             boardLabel: boardLabelCompleted,
+                            variantLabel: data.variant_label,
                             attemptIndex: data.attempt_index,
                             totalAttempts: data.total_attempts,
                             timeLimitSec: data.time_limit_sec,
@@ -279,9 +301,10 @@
                     statusText.textContent = 'Exploring layouts…';
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabel = formatBoardSize(data.board_size_ft);
-                        gridText.textContent = boardLabel;
+                        updateGridDisplay(boardLabel, data.variant_label);
                         attemptText.textContent = buildAttemptDisplay({
                             boardLabel,
+                            variantLabel: data.variant_label,
                             attemptIndex: data.attempt_index,
                             totalAttempts: data.total_attempts,
                             timeLimitSec: data.time_limit_sec,

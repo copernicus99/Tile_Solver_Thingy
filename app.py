@@ -92,11 +92,13 @@ class RunLogWriter:
         elif event_type == "attempt_started":
             idx = event.get("attempt_index")
             board = event.get("board_size_ft") or (None, None)
+            variant_label = event.get("variant_label") or "Initial"
             lines.append(
-                "Attempt {idx} started on board {w:.2f}ft x {h:.2f}ft.".format(
+                "Attempt {idx} started on board {w:.2f}ft x {h:.2f}ft ({variant}).".format(
                     idx=idx,
                     w=(board[0] or 0.0),
                     h=(board[1] or 0.0),
+                    variant=variant_label,
                 )
             )
         elif event_type == "attempt_completed":
@@ -105,9 +107,11 @@ class RunLogWriter:
             elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
             success = "yes" if event.get("success") else "no"
             backtracks = event.get("backtracks")
+            variant_label = event.get("variant_label") or "Initial"
             lines.append(
-                "Attempt {idx} completed in {elapsed} (success: {success}, backtracks: {backtracks}).".format(
+                "Attempt {idx} ({variant}) completed in {elapsed} (success: {success}, backtracks: {backtracks}).".format(
                     idx=idx,
+                    variant=variant_label,
                     elapsed=elapsed_text,
                     success=success,
                     backtracks=backtracks if backtracks is not None else "unknown",
@@ -152,9 +156,10 @@ class RunLogWriter:
             for attempt in phase_log.attempts:
                 width_ft, height_ft = attempt.board_size_ft
                 lines.append(
-                    "  Board {w:.2f}ft x {h:.2f}ft | elapsed={elapsed:.2f}s | backtracks={backtracks} | success={success}".format(
+                    "  Board {w:.2f}ft x {h:.2f}ft ({variant}) | elapsed={elapsed:.2f}s | backtracks={backtracks} | success={success}".format(
                         w=width_ft,
                         h=height_ft,
+                        variant=attempt.variant_label,
                         elapsed=attempt.elapsed,
                         backtracks=attempt.backtracks,
                         success="yes" if attempt.success else "no",
@@ -557,7 +562,7 @@ def _write_log(path: Path, logs: List[PhaseLog]) -> None:
         for attempt in phase_log.attempts:
             width_ft, height_ft = attempt.board_size_ft
             lines.append(
-                f"  Board {width_ft:.2f}ft x {height_ft:.2f}ft | elapsed={attempt.elapsed:.2f}s | backtracks={attempt.backtracks} | success={'yes' if attempt.success else 'no'}"
+                f"  Board {width_ft:.2f}ft x {height_ft:.2f}ft ({attempt.variant_label}) | elapsed={attempt.elapsed:.2f}s | backtracks={attempt.backtracks} | success={'yes' if attempt.success else 'no'}"
             )
         if phase_log.result:
             lines.append("  Result achieved")

@@ -178,6 +178,14 @@ button[type="submit"]:hover {
     font-weight: 600;
 }
 
+.overlay-stats .grid-variant {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(245, 247, 250, 0.7);
+    margin-top: 0.25rem;
+}
+
 .overlay-stats #stat-attempt {
     white-space: pre-line;
 }
