@@ -182,14 +182,17 @@
         }) {
             const lines = [];
             if (boardLabel) {
-                const labelParts = [boardLabel];
-                if (variantLabel) {
-                    labelParts.push(variantLabel);
-                }
                 const attemptCount = typeof totalAttempts === 'number'
                     ? `${attemptIndex} of ${totalAttempts}`
                     : `Attempt ${attemptIndex}`;
-                lines.push(`${labelParts.join(' — ')} (${attemptCount})`);
+                const headerParts = [boardLabel];
+                if (attemptCount) {
+                    headerParts.push(`(${attemptCount})`);
+                }
+                lines.push(headerParts.join(' '));
+                if (variantLabel) {
+                    lines.push(variantLabel);
+                }
             }
 
             const parsedTimeLimit = Number(timeLimitSec);
@@ -197,11 +200,11 @@
             const parsedElapsed = Number(attemptElapsed);
             const hasElapsed = Number.isFinite(parsedElapsed);
             if (hasTimeLimit && hasElapsed) {
-                lines.push(`${formatSeconds(parsedTimeLimit)} : ${formatSeconds(parsedElapsed)} elapsed`);
+                lines.push(`TOT ${formatSeconds(parsedTimeLimit)} : ELAP ${formatSeconds(parsedElapsed)}`);
             } else if (hasElapsed) {
-                lines.push(`${formatSeconds(parsedElapsed)} elapsed`);
+                lines.push(`ELAP ${formatSeconds(parsedElapsed)}`);
             } else if (hasTimeLimit) {
-                lines.push(`${formatSeconds(parsedTimeLimit)}`);
+                lines.push(`TOT ${formatSeconds(parsedTimeLimit)}`);
             }
 
             const parsedBacktracks = Number(backtracks);
