@@ -294,13 +294,27 @@ class TileSolverOrchestrator:
         return max(0.0, limit)
 
     def _max_edge_for_dimension(self, length_cells: int) -> int:
+        limits: List[int] = []
+
         ratio = getattr(SETTINGS, "MAX_EDGE_RATIO", None)
         if ratio is not None and ratio > 0:
-            limit = math.floor(length_cells * ratio)
-            return max(1, limit)
+            length_ft = length_cells * self.unit_ft
+            ratio_limit_ft = math.ceil(length_ft * ratio)
+            if ratio_limit_ft > 0:
+                ratio_limit_cells = int(round(ratio_limit_ft / self.unit_ft))
+                ratio_limit_cells = max(1, min(length_cells, ratio_limit_cells))
+                limits.append(ratio_limit_cells)
+
         absolute_ft = getattr(SETTINGS, "MAX_EDGE_FT", 0.0)
-        limit_cells = int(absolute_ft / self.unit_ft) if absolute_ft > 0 else 0
-        return max(0, limit_cells)
+        if absolute_ft and absolute_ft > 0:
+            limit_cells = int(math.floor(absolute_ft / self.unit_ft + 1e-9))
+            if limit_cells > 0:
+                limits.append(limit_cells)
+
+        if not limits:
+            return 0
+
+        return min(limits)
 
     def _select_phases(self, total_area_ft: float):
         if total_area_ft < 100:
