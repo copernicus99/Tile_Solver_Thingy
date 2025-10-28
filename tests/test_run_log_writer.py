@@ -44,3 +44,15 @@ def test_append_summary_lists_discarded_tiles(log_path: Path) -> None:
     content = log_path.read_text(encoding="utf-8")
     assert "Discarded tiles:" in content
     assert "- 1x1_1 (1.0ft × 1.0ft)" in content
+
+
+def test_header_includes_timestamp_and_selection(log_path: Path) -> None:
+    selection = {"1x1": 2, "1x2": 1}
+    writer = RunLogWriter(log_path, selection)
+
+    content = log_path.read_text(encoding="utf-8")
+    assert "Generated at:" in content
+    assert "Tile counts:" in content
+    assert "- 1x1: 2 (1.0ft × 1.0ft)" in content
+    assert "- 1x2: 1 (1.0ft × 2.0ft)" in content
+    assert "Total tiles: 3" in content
