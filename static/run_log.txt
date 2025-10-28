@@ -10,29 +10,29 @@ Run started.
   Total allotted time: 1200.00s
 Phase 1 (Phase C) started. Time limit: 600.00s.
 Attempt 1 started on board 12.00ft x 12.00ft.
-Attempt 1 completed in 120.14s (success: no, backtracks: 80530).
+Attempt 1 completed in 120.03s (success: no, backtracks: 293633).
 Attempt 2 started on board 11.00ft x 11.00ft.
-Attempt 2 completed in 96.05s (success: no, backtracks: 105167).
+Attempt 2 completed in 96.02s (success: no, backtracks: 263249).
 Attempt 3 started on board 10.00ft x 10.00ft.
-Attempt 3 completed in 96.04s (success: no, backtracks: 120487).
+Attempt 3 completed in 96.02s (success: no, backtracks: 286970).
 Attempt 4 started on board 9.00ft x 9.00ft.
-Attempt 4 completed in 96.06s (success: no, backtracks: 116250).
+Attempt 4 completed in 96.01s (success: no, backtracks: 328170).
 Attempt 5 started on board 8.00ft x 8.00ft.
-Attempt 5 completed in 96.03s (success: no, backtracks: 105130).
+Attempt 5 completed in 96.01s (success: no, backtracks: 365048).
 Attempt 6 started on board 7.00ft x 7.00ft.
-Attempt 6 completed in 0.29s (success: yes, backtracks: 382).
-Phase Phase C completed in 504.63s (success: yes).
-Run completed in 504.63s (success: yes).
+Attempt 6 completed in 0.08s (success: yes, backtracks: 382).
+Phase Phase C completed in 504.18s (success: yes).
+Run completed in 504.18s (success: yes).
 
 Summary:
 Phase C
-  Total elapsed: 504.63s
-  Board 12.00ft x 12.00ft | elapsed=120.14s | backtracks=80530 | success=no
-  Board 11.00ft x 11.00ft | elapsed=96.05s | backtracks=105167 | success=no
-  Board 10.00ft x 10.00ft | elapsed=96.04s | backtracks=120487 | success=no
-  Board 9.00ft x 9.00ft | elapsed=96.06s | backtracks=116250 | success=no
-  Board 8.00ft x 8.00ft | elapsed=96.03s | backtracks=105130 | success=no
-  Board 7.00ft x 7.00ft | elapsed=0.29s | backtracks=382 | success=yes
+  Total elapsed: 504.18s
+  Board 12.00ft x 12.00ft | elapsed=120.03s | backtracks=293633 | success=no
+  Board 11.00ft x 11.00ft | elapsed=96.02s | backtracks=263249 | success=no
+  Board 10.00ft x 10.00ft | elapsed=96.02s | backtracks=286970 | success=no
+  Board 9.00ft x 9.00ft | elapsed=96.01s | backtracks=328170 | success=no
+  Board 8.00ft x 8.00ft | elapsed=96.01s | backtracks=365048 | success=no
+  Board 7.00ft x 7.00ft | elapsed=0.08s | backtracks=382 | success=yes
   Result achieved
 
 Run ended with a successful solution.
