@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,7 @@ class SolveRequest:
     allow_rotation: bool
     allow_pop_outs: bool
     allow_discards: bool
+    board_mask: Optional[List[List[bool]]] = None
 
 
 @dataclass

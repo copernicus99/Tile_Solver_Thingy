@@ -7,6 +7,9 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from .models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
 
+MASKED_CELL = -3
+
+
 @dataclass
 class SolverOptions:
     max_edge_cells_horizontal: int
@@ -37,7 +40,14 @@ class BacktrackingSolver:
         self.height = request.board_height_cells
         self.allow_pop_outs = request.allow_pop_outs
         self.allow_discards = request.allow_discards
-        self.grid: List[List[int]] = [[-1 for _ in range(self.width)] for _ in range(self.height)]
+        self.board_mask = self._build_board_mask(request.board_mask)
+        self.grid: List[List[int]] = [
+            [
+                -1 if self.board_mask[y][x] else MASKED_CELL
+                for x in range(self.width)
+            ]
+            for y in range(self.height)
+        ]
         self.tiles: List[TileInstance] = []
         self.placements: Dict[int, Placement] = {}
         self.stats = SolverStats()
@@ -48,6 +58,20 @@ class BacktrackingSolver:
         self._height_cache: Dict[Tuple[frozenset[int], int], bool] = {}
         self._progress_callback = progress_callback
         self._build_tiles()
+
+    def _build_board_mask(self, raw_mask: Optional[List[List[bool]]]) -> List[List[bool]]:
+        if raw_mask is None:
+            return [[True for _ in range(self.width)] for _ in range(self.height)]
+        if len(raw_mask) != self.height:
+            raise ValueError("Board mask height must match board height")
+        normalized: List[List[bool]] = []
+        for row in raw_mask:
+            if len(row) != self.width:
+                raise ValueError("Board mask width must match board width")
+            normalized.append([bool(cell) for cell in row])
+        if not self.allow_pop_outs and any(not cell for row in normalized for cell in row):
+            raise ValueError("Board mask cannot disable cells unless pop-outs are allowed")
+        return normalized
 
     def _build_tiles(self) -> None:
         for tile_type, qty in self.request.tile_quantities.items():
@@ -315,6 +339,8 @@ class BacktrackingSolver:
         for dy in range(height):
             row = self.grid[y + dy]
             for dx in range(width):
+                if row[x + dx] == MASKED_CELL:
+                    raise ValueError("Cannot place a tile on a masked board cell")
                 row[x + dx] = tile_idx
 
     def _clear_cells(self, tile_idx: int, x: int, y: int, width: int, height: int) -> None:
@@ -333,12 +359,14 @@ class BacktrackingSolver:
             for ix in range(x - 1, x + width):
                 if ix < 0 or ix + 1 >= self.width:
                     continue
-                cells = {
-                    self.grid[iy][ix],
-                    self.grid[iy][ix + 1],
-                    self.grid[iy + 1][ix],
-                    self.grid[iy + 1][ix + 1],
-                }
+                values = []
+                for cy in (iy, iy + 1):
+                    for cx in (ix, ix + 1):
+                        value = self.grid[cy][cx]
+                        if value == MASKED_CELL:
+                            value = -1
+                        values.append(value)
+                cells = set(values)
                 if -1 in cells:
                     continue
                 if len(cells) == 4:
@@ -356,7 +384,7 @@ class BacktrackingSolver:
             for nx, ny in self._edge_neighbors(placement):
                 if 0 <= nx < self.width and 0 <= ny < self.height:
                     neighbor_tile = self.grid[ny][nx]
-                    if neighbor_tile == -1 or neighbor_tile == for_tile:
+                    if neighbor_tile < 0 or neighbor_tile == for_tile:
                         continue
                     shape = self.tiles[neighbor_tile].type.name
                     neighbors.setdefault(shape, set()).add(neighbor_tile)
@@ -376,7 +404,7 @@ class BacktrackingSolver:
                     ax, ay = adj
                     if 0 <= ax < self.width and 0 <= ay < self.height:
                         neighbor_tile = self.grid[ay][ax]
-                        if neighbor_tile != -1 and neighbor_tile != tile_idx:
+                        if neighbor_tile >= 0 and neighbor_tile != tile_idx:
                             counts = neighbor_shapes(neighbor_tile)
                             if any(len(ids) > limit for ids in counts.values()):
                                 return False
@@ -413,7 +441,7 @@ class BacktrackingSolver:
             for nx, ny in self._edge_neighbors(placement):
                 if 0 <= nx < self.width and 0 <= ny < self.height:
                     neighbor_tile = self.grid[ny][nx]
-                    if neighbor_tile == -1 or neighbor_tile == tile_idx:
+                    if neighbor_tile < 0 or neighbor_tile == tile_idx:
                         continue
                     shape = self.tiles[neighbor_tile].type.name
                     neighbors.setdefault(shape, set()).add(neighbor_tile)
@@ -434,6 +462,9 @@ class BacktrackingSolver:
                     if upper == lower:
                         run = 0
                         continue
+                    if upper == MASKED_CELL or lower == MASKED_CELL:
+                        run = 0
+                        continue
                     if not include_perimeter and (upper == -2 or lower == -2):
                         run = 0
                         continue
@@ -447,6 +478,9 @@ class BacktrackingSolver:
                     left = self.grid[y][x - 1] if x > 0 else -2
                     right = self.grid[y][x] if x < self.width else -2
                     if left == right:
+                        run = 0
+                        continue
+                    if left == MASKED_CELL or right == MASKED_CELL:
                         run = 0
                         continue
                     if not include_perimeter and (left == -2 or right == -2):
