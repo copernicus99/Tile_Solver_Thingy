@@ -3,11 +3,18 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from config import SETTINGS, PhaseConfig
 from .backtracking_solver import BacktrackingSolver, SolverOptions
 from .models import SolveRequest, SolveResult, TileType
+
+
+@dataclass(frozen=True)
+class BoardCandidate:
+    width: int
+    height: int
+    pop_out_masks: Tuple[Tuple[Tuple[bool, ...], ...], ...]
 
 
 @dataclass
@@ -88,8 +95,13 @@ class TileSolverOrchestrator:
                 phase_count=len(phases),
                 overall_elapsed=time.time() - overall_start,
             )
-            total_attempts = len(candidate_boards)
-            for attempt_index, (board_w, board_h) in enumerate(candidate_boards, start=1):
+            phase_candidates = list(
+                self._phase_board_attempts(candidate_boards, phase.allow_pop_outs)
+            )
+            total_attempts = len(phase_candidates)
+            for attempt_index, (board_w, board_h, mask) in enumerate(
+                phase_candidates, start=1
+            ):
                 phase_limit = phase.time_limit_sec
                 if phase_limit is not None:
                     elapsed_before_attempt = time.time() - phase_start
@@ -114,6 +126,7 @@ class TileSolverOrchestrator:
                     allow_rotation=phase.allow_rotation,
                     allow_pop_outs=phase.allow_pop_outs,
                     allow_discards=phase.allow_discards,
+                    board_mask=[list(row) for row in mask] if mask is not None else None,
                 )
                 options = SolverOptions(
                     max_edge_cells_horizontal=self._max_edge_for_dimension(board_w),
@@ -334,7 +347,18 @@ class TileSolverOrchestrator:
                 quantities[tile_type] = count
         return quantities
 
-    def _candidate_boards(self, total_area_ft: float) -> List[Tuple[int, int]]:
+    def _phase_board_attempts(
+        self, candidates: Sequence[BoardCandidate], allow_pop_outs: bool
+    ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]]]]:
+        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
+        for candidate in candidates:
+            yield candidate.width, candidate.height, None
+            if not allow_pop_outs or max_variants <= 0:
+                continue
+            for mask in candidate.pop_out_masks[:max_variants]:
+                yield candidate.width, candidate.height, mask
+
+    def _candidate_boards(self, total_area_ft: float) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
 
@@ -365,13 +389,113 @@ class TileSolverOrchestrator:
                 )
             return rounded
 
-        boards: List[Tuple[int, int]] = []
+        boards: List[BoardCandidate] = []
         for reduction in range(6):
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
-            boards.append((cells, cells))
+            pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells)
+            boards.append(BoardCandidate(cells, cells, pop_out_masks))
 
         return boards
 
+    def _generate_pop_out_masks(
+        self, width: int, height: int, target_cells: int
+    ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
+        slack = width * height - target_cells
+        if slack <= 0:
+            return ()
 
-__all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt"]
+        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
+        if max_variants <= 0:
+            return ()
+
+        max_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        masks: List[Tuple[Tuple[bool, ...], ...]] = []
+
+        def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:
+            if len(masks) >= max_variants:
+                return
+            mask = [[True for _ in range(width)] for _ in range(height)]
+            removed = 0
+            for orientation, depth, length in notches:
+                if orientation in ("top", "bottom"):
+                    if depth > height:
+                        return
+                    if length > width:
+                        return
+                    for offset in range(depth):
+                        row_idx = offset if orientation == "top" else height - 1 - offset
+                        for col in range(length):
+                            col_idx = col if orientation == "top" else width - 1 - col
+                            if not mask[row_idx][col_idx]:
+                                return
+                            mask[row_idx][col_idx] = False
+                            removed += 1
+                else:
+                    if depth > width:
+                        return
+                    if length > height:
+                        return
+                    for offset in range(depth):
+                        col_idx = offset if orientation == "left" else width - 1 - offset
+                        for row in range(length):
+                            row_idx = row if orientation == "left" else height - 1 - row
+                            if not mask[row_idx][col_idx]:
+                                return
+                            mask[row_idx][col_idx] = False
+                            removed += 1
+            if removed != slack:
+                return
+            masks.append(tuple(tuple(row) for row in mask))
+
+        orientations = ("top", "bottom", "left", "right")
+        orientation_dims = {
+            "top": width,
+            "bottom": width,
+            "left": height,
+            "right": height,
+        }
+        orientation_depth_limits = {
+            "top": height,
+            "bottom": height,
+            "left": width,
+            "right": width,
+        }
+
+        for orientation in orientations:
+            dim = orientation_dims[orientation]
+            depth_limit = min(max_depth, orientation_depth_limits[orientation])
+            for depth in range(1, depth_limit + 1):
+                if slack % depth != 0:
+                    continue
+                length = slack // depth
+                if 0 < length <= dim:
+                    build_mask(((orientation, depth, length),))
+                if len(masks) >= max_variants:
+                    return tuple(masks)
+
+        opposite_pairs = (("top", "bottom"), ("left", "right"))
+        for first, second in opposite_pairs:
+            first_dim = orientation_dims[first]
+            second_dim = orientation_dims[second]
+            first_depth_limit = min(max_depth, orientation_depth_limits[first])
+            second_depth_limit = min(max_depth, orientation_depth_limits[second])
+            for depth1 in range(1, first_depth_limit + 1):
+                for depth2 in range(1, second_depth_limit + 1):
+                    max_length1 = min(first_dim, slack // depth1)
+                    for length1 in range(1, max_length1 + 1):
+                        remaining = slack - depth1 * length1
+                        if remaining <= 0:
+                            continue
+                        if remaining % depth2 != 0:
+                            continue
+                        length2 = remaining // depth2
+                        if 0 < length2 <= second_dim:
+                            build_mask(((first, depth1, length1), (second, depth2, length2)))
+                        if len(masks) >= max_variants:
+                            return tuple(masks)
+
+        return tuple(masks)
+
+
+__all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt", "BoardCandidate"]

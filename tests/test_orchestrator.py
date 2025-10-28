@@ -1,12 +1,14 @@
 import math
 import unittest
 from collections import OrderedDict
+from contextlib import ExitStack
+from typing import Dict, List, Optional, Tuple
 from unittest import mock
 
 from config import SETTINGS
 
 from solver.backtracking_solver import BacktrackingSolver, SolverOptions
-from solver.orchestrator import TileSolverOrchestrator
+from solver.orchestrator import BoardCandidate, TileSolverOrchestrator
 from solver.models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
 
@@ -25,19 +27,37 @@ class CandidateBoardTests(unittest.TestCase):
             (4, 4),
             (2, 2),
         ]
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
     def test_clamps_minimum_board_size_to_one_foot(self):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
         candidates = self.orchestrator._candidate_boards(total_area_ft)
         expected = [(2, 2)] * 6
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
     def test_small_fractional_area_pads_up_to_one_foot(self):
         candidates = self.orchestrator._candidate_boards(0.3)
         expected = [(2, 2)] * 6
-        self.assertEqual(expected, candidates)
+        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
+
+
+class PopOutBoardTests(unittest.TestCase):
+    def setUp(self):
+        self.orchestrator = TileSolverOrchestrator()
+
+    def test_candidate_masks_preserve_target_area(self):
+        total_area_ft = 30.0
+        candidates = self.orchestrator._candidate_boards(total_area_ft)
+        self.assertTrue(candidates, "Expected at least one candidate board")
+        first = candidates[0]
+        self.assertTrue(first.pop_out_masks, "Pop-out masks should be generated when slack allows")
+        mask = first.pop_out_masks[0]
+        available_cells = sum(1 for row in mask for cell in row if cell)
+        unit_area = self.orchestrator.unit_ft ** 2
+        padded_area_ft = math.ceil(total_area_ft)
+        target_cells = int(round(padded_area_ft / unit_area))
+        self.assertEqual(target_cells, available_cells)
 
 
 class SolverOptionTests(unittest.TestCase):
@@ -77,7 +97,11 @@ class SolverOptionTests(unittest.TestCase):
             def solve(self):
                 return None
 
-        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(14, 14)]), mock.patch(
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_candidate_boards",
+            return_value=[BoardCandidate(14, 14, tuple())],
+        ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
             orchestrator.solve({"1x1": 1})
@@ -87,6 +111,97 @@ class SolverOptionTests(unittest.TestCase):
             captured_options[0].max_edge_include_perimeter,
             "Perimeter seams must be included when enforcing straight-edge limits.",
         )
+
+
+class PhasePopOutIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.orchestrator = TileSolverOrchestrator()
+        self.mask = (
+            (False, True, True, True),
+            (False, True, True, True),
+            (True, True, True, True),
+            (True, True, True, True),
+        )
+        self.candidate = [BoardCandidate(4, 4, (self.mask,))]
+
+    def _run_with_overrides(self, selection, phase_sequence=None):
+        records: List[Tuple[str, Optional[List[List[bool]]]]] = []
+
+        class RecordingSolver:
+            def __init__(self, request, options, unit_ft, phase_name, progress_callback=None):
+                self.request = request
+                self.options = options
+                self.unit_ft = unit_ft
+                self.phase_name = phase_name
+                self.stats = SolverStats()
+                records.append((phase_name, request.board_mask))
+
+            def solve(self):
+                return None
+
+        candidate_patch = mock.patch.object(
+            TileSolverOrchestrator, "_candidate_boards", return_value=self.candidate
+        )
+        solver_patch = mock.patch("solver.orchestrator.BacktrackingSolver", RecordingSolver)
+        patches = [candidate_patch, solver_patch]
+        if phase_sequence is not None:
+            patches.append(
+                mock.patch.object(
+                    TileSolverOrchestrator, "_select_phases", return_value=phase_sequence
+                )
+            )
+        with ExitStack() as stack:
+            for patcher in patches:
+                stack.enter_context(patcher)
+            self.orchestrator.solve(selection)
+        return records
+
+    def test_phase_b_attempts_masked_board(self):
+        records = self._run_with_overrides({"1x1": 1})
+        masks_by_phase: Dict[str, List[Optional[List[List[bool]]]]] = {}
+        for phase, mask in records:
+            masks_by_phase.setdefault(phase, []).append(mask)
+        self.assertIn(SETTINGS.PHASE_B.name, masks_by_phase)
+        self.assertTrue(
+            any(mask is not None for mask in masks_by_phase[SETTINGS.PHASE_B.name]),
+            "Phase B should attempt at least one masked board when pop-outs are enabled.",
+        )
+        expected_mask = [list(row) for row in self.mask]
+        self.assertIn(
+            expected_mask,
+            masks_by_phase[SETTINGS.PHASE_B.name],
+        )
+        self.assertTrue(
+            all(mask is None for mask in masks_by_phase.get(SETTINGS.PHASE_A.name, [])),
+            "Phase A must not receive pop-out masks when disabled.",
+        )
+
+    def test_phase_d_attempts_masked_board(self):
+        phase_sequence = [SETTINGS.PHASE_C, SETTINGS.PHASE_D]
+        records = self._run_with_overrides({"1x1": 250}, phase_sequence=phase_sequence)
+        masks_by_phase: Dict[str, List[Optional[List[List[bool]]]]] = {}
+        for phase, mask in records:
+            masks_by_phase.setdefault(phase, []).append(mask)
+        self.assertIn(SETTINGS.PHASE_D.name, masks_by_phase)
+        self.assertTrue(
+            any(mask is not None for mask in masks_by_phase[SETTINGS.PHASE_D.name]),
+            "Phase D should attempt at least one masked board when pop-outs are enabled.",
+        )
+        expected_mask = [list(row) for row in self.mask]
+        self.assertIn(
+            expected_mask,
+            masks_by_phase[SETTINGS.PHASE_D.name],
+        )
+
+    def test_disabling_pop_out_variants_skips_masks(self):
+        original_variants = getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", None)
+        try:
+            setattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0)
+            records = self._run_with_overrides({"1x1": 1})
+        finally:
+            setattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", original_variants)
+        self.assertTrue(records, "Solver should still attempt boards")
+        self.assertTrue(all(mask is None for _, mask in records))
 
 
 class DiscardHandlingTests(unittest.TestCase):
@@ -175,7 +290,11 @@ class DiscardHandlingTests(unittest.TestCase):
             def solve(self):
                 return fake_result
 
-        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[(4, 4)]), mock.patch(
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_candidate_boards",
+            return_value=[BoardCandidate(4, 4, tuple())],
+        ), mock.patch(
             "solver.orchestrator.BacktrackingSolver", FakeSolver
         ):
             result, logs = orchestrator.solve({"1x1": 1})
