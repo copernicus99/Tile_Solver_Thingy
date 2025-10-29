@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
+import random
 import time
-from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -10,9 +10,11 @@ from config import SETTINGS, PhaseConfig
 try:  # pragma: no cover - prefer package-relative import
     from .backtracking_solver import BacktrackingSolver, SolverOptions
     from .models import SolveRequest, SolveResult, TileType
+    from .mask_builder import generate_mask
 except ImportError:  # pragma: no cover - allow running as a script
     from solver.backtracking_solver import BacktrackingSolver, SolverOptions  # type: ignore[no-redef]
     from solver.models import SolveRequest, SolveResult, TileType  # type: ignore[no-redef]
+    from solver.mask_builder import generate_mask  # type: ignore[no-redef]
 
 
 @dataclass(frozen=True)
@@ -58,7 +60,10 @@ class TileSolverOrchestrator:
             name: TileType(name, dims[0], dims[1]) for name, dims in SETTINGS.TILE_OPTIONS.items()
         }
         self._min_tile_edge_cells = self._compute_min_tile_edge()
-        self._mask_cache: Dict[Tuple[int, int, int, int], Tuple[Tuple[Tuple[bool, ...], ...], ...]] = {}
+        self._mask_cache: Dict[
+            Tuple[int, int, int, int, Tuple[Tuple[str, int], ...]],
+            Tuple[Tuple[Tuple[bool, ...], ...], ...],
+        ] = {}
 
     def solve(
         self,
@@ -98,7 +103,9 @@ class TileSolverOrchestrator:
         total_allotment = sum(
             phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
         )
-        candidate_boards = list(self._candidate_boards(total_area_ft, max_pop_out_depth))
+        candidate_boards = list(
+            self._candidate_boards(total_area_ft, max_pop_out_depth, tile_quantities)
+        )
         for phase_index, phase in enumerate(phases):
             phase_start = time.time()
             attempts: List[PhaseAttempt] = []
@@ -412,7 +419,6 @@ class TileSolverOrchestrator:
         *,
         allow_overage_without_popouts: bool = False,
     ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
-        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
         for candidate in candidates:
             board_area = candidate.width * candidate.height
             target = candidate.target_cells
@@ -425,12 +431,17 @@ class TileSolverOrchestrator:
             ):
                 continue
             yield candidate.width, candidate.height, None, None
-            if not allow_pop_outs or max_variants <= 0:
+            if not allow_pop_outs:
                 continue
-            for index, mask in enumerate(candidate.pop_out_masks[:max_variants], start=1):
+            for index, mask in enumerate(candidate.pop_out_masks, start=1):
                 yield candidate.width, candidate.height, mask, index
 
-    def _candidate_boards(self, total_area_ft: float, max_pop_out_depth: int) -> List[BoardCandidate]:
+    def _candidate_boards(
+        self,
+        total_area_ft: float,
+        max_pop_out_depth: int,
+        tile_quantities: Dict[TileType, int],
+    ) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
 
@@ -465,167 +476,122 @@ class TileSolverOrchestrator:
         for reduction in range(6):
             side_ft = max(1, starting_side_ft - reduction)
             cells = ft_to_cells(side_ft)
-            pop_out_masks = self._generate_pop_out_masks(cells, cells, area_cells, max_pop_out_depth)
+            pop_out_masks = self._generate_pop_out_masks(
+                cells,
+                cells,
+                area_cells,
+                max_pop_out_depth,
+                tile_quantities,
+            )
             boards.append(BoardCandidate(cells, cells, area_cells, pop_out_masks))
 
         return boards
 
     def _generate_pop_out_masks(
-        self, width: int, height: int, target_cells: int, max_depth: int
+        self,
+        width: int,
+        height: int,
+        target_cells: int,
+        max_depth: int,
+        tile_quantities: Dict[TileType, int],
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
-        cache_key = (width, height, target_cells, max_depth)
+        signature = self._mask_tile_signature(tile_quantities)
+        cache_key = (width, height, target_cells, max_depth, signature)
         cached = self._mask_cache.get(cache_key)
         if cached is not None:
             return cached
+
         slack = self._resolve_slack_for_mask(width, height, target_cells, max_depth)
-        if slack <= 0:
+        if slack <= 0 or max_depth <= 0:
             self._mask_cache[cache_key] = ()
             return ()
 
-        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
-        if max_variants <= 0:
-            return ()
-
-        if max_depth <= 0:
-            return ()
-
-        masks: List[Tuple[Tuple[bool, ...], ...]] = []
+        min_span = self._minimum_mask_span(width, height)
+        horizontal_limit = self._max_edge_for_dimension(width)
+        vertical_limit = self._max_edge_for_dimension(height)
+        attempts = max(getattr(SETTINGS, "MASK_GENERATION_ATTEMPTS", 8), 1)
+        validation_attempts = max(getattr(SETTINGS, "MASK_VALIDATION_ATTEMPTS", 4), 1)
         seen: Set[Tuple[Tuple[bool, ...], ...]] = set()
 
-        def build_mask(notches: Sequence[Tuple[str, int, int, int]]) -> None:
-            if len(masks) >= max_variants:
-                return
-            if not notches:
-                return
-            if not self._has_mirrored_notch(notches):
-                return
-            rendered = self._render_mask_from_notches(width, height, notches)
-            if rendered is None:
-                return
-            mask_tuple, removed = rendered
-            if removed != slack:
-                return
+        for attempt in range(attempts):
+            seed = hash((width, height, target_cells, max_depth, signature, attempt))
+            rng = random.Random(seed)
+            mask = generate_mask(
+                width,
+                height,
+                target_cells,
+                max_depth,
+                min_span,
+                horizontal_limit,
+                vertical_limit,
+                rng=rng,
+                attempts=validation_attempts * 2,
+            )
+            if mask is None:
+                continue
+            mask_tuple = tuple(tuple(row) for row in mask)
             if mask_tuple in seen:
-                return
+                continue
             seen.add(mask_tuple)
-            masks.append(mask_tuple)
+            if self._mask_is_valid(
+                tile_quantities,
+                width,
+                height,
+                target_cells,
+                mask_tuple,
+            ):
+                result = (mask_tuple,)
+                self._mask_cache[cache_key] = result
+                return result
 
-        orientation_dims = {
-            "top": width,
-            "bottom": width,
-            "left": height,
-            "right": height,
-        }
-        orientation_depth_limits = {
-            "top": height,
-            "bottom": height,
-            "left": width,
-            "right": width,
-        }
+        self._mask_cache[cache_key] = ()
+        return ()
 
-        def sort_notches(notches: Sequence[Tuple[str, int, int, int]]) -> Tuple[Tuple[str, int, int, int], ...]:
-            order = {"top": 0, "bottom": 1, "left": 2, "right": 3}
-            return tuple(sorted(notches, key=lambda item: (order[item[0]], item[3], item[1], item[2])))
+    def _mask_tile_signature(self, tile_quantities: Dict[TileType, int]) -> Tuple[Tuple[str, int], ...]:
+        pairs = [
+            (tile.name, qty)
+            for tile, qty in tile_quantities.items()
+            if qty > 0
+        ]
+        return tuple(sorted(pairs))
 
-        def enumerate_orientation_layouts(
-            orientation: str,
-        ) -> Dict[int, List[Tuple[Tuple[str, int, int, int], ...]]]:
-            depth_limit = min(max_depth, orientation_depth_limits[orientation])
-            dim = orientation_dims[orientation]
-            layouts: Dict[int, List[Tuple[Tuple[str, int, int, int], ...]]] = defaultdict(list)
-            layout_cap = max(1, max_variants)
-            if depth_limit <= 0 or dim <= 0:
-                layouts[0].append(tuple())
-                return layouts
+    def _mask_is_valid(
+        self,
+        tile_quantities: Dict[TileType, int],
+        width: int,
+        height: int,
+        target_cells: int,
+        mask: Tuple[Tuple[bool, ...], ...],
+    ) -> bool:
+        available = sum(1 for row in mask for cell in row if cell)
+        if available != target_cells:
+            return False
 
-            max_notches = max(1, min(slack if slack > 0 else 0, dim, 8))
-
-            def backtrack(
-                start_index: int,
-                used_mask: int,
-                removed: int,
-                placements: Tuple[Tuple[str, int, int, int], ...],
-                notch_count: int,
-            ) -> None:
-                if notch_count > max_notches:
-                    return
-                options = layouts[removed]
-                if len(options) < layout_cap:
-                    options.append(placements)
-                if removed >= slack:
-                    return
-                for start in range(start_index, dim):
-                    if used_mask & (1 << start):
-                        continue
-                    max_length = 0
-                    while (
-                        start + max_length < dim
-                        and not (used_mask & (1 << (start + max_length)))
-                    ):
-                        max_length += 1
-                    if max_length <= 0:
-                        continue
-                    for depth in range(1, depth_limit + 1):
-                        remaining_slack = slack - removed
-                        max_length_for_depth = min(
-                            max_length,
-                            remaining_slack // depth if remaining_slack > 0 else 0,
-                        )
-                        if max_length_for_depth <= 0:
-                            continue
-                        for length in range(1, max_length_for_depth + 1):
-                            segment_mask = ((1 << length) - 1) << start
-                            if used_mask & segment_mask:
-                                continue
-                            removed_cells = depth * length
-                            new_removed = removed + removed_cells
-                            new_notches = placements + ((orientation, depth, length, start),)
-                            backtrack(
-                                start + length,
-                                used_mask | segment_mask,
-                                new_removed,
-                                new_notches,
-                                notch_count + 1,
-                            )
-
-            backtrack(0, 0, 0, tuple(), 0)
-            return layouts
-
-        top_layouts = enumerate_orientation_layouts("top")
-        bottom_layouts = enumerate_orientation_layouts("bottom")
-        left_layouts = enumerate_orientation_layouts("left")
-        right_layouts = enumerate_orientation_layouts("right")
-
-        for top_removed, top_options in top_layouts.items():
-            for bottom_removed, bottom_options in bottom_layouts.items():
-                horizontal_removed = top_removed + bottom_removed
-                if horizontal_removed > slack:
-                    continue
-                for left_removed, left_options in left_layouts.items():
-                    total_horizontal_vertical = horizontal_removed + left_removed
-                    if total_horizontal_vertical > slack:
-                        continue
-                    for right_removed, right_options in right_layouts.items():
-                        total_removed = total_horizontal_vertical + right_removed
-                        if total_removed != slack:
-                            continue
-                        for top_notches in top_options:
-                            for bottom_notches in bottom_options:
-                                for left_notches in left_options:
-                                    for right_notches in right_options:
-                                        combined = sort_notches(
-                                            top_notches
-                                            + bottom_notches
-                                            + left_notches
-                                            + right_notches
-                                        )
-                                        build_mask(combined)
-                                        if len(masks) >= max_variants:
-                                            return tuple(masks)
-
-        result = tuple(masks)
-        self._mask_cache[cache_key] = result
-        return result
+        request = SolveRequest(
+            tile_quantities,
+            width,
+            height,
+            allow_rotation=True,
+            allow_pop_outs=True,
+            allow_discards=False,
+            board_mask=[list(row) for row in mask],
+        )
+        validation_limit = getattr(SETTINGS, "MASK_VALIDATION_TIME_LIMIT", 5.0)
+        options = SolverOptions(
+            max_edge_cells_horizontal=self._max_edge_for_dimension(width),
+            max_edge_cells_vertical=self._max_edge_for_dimension(height),
+            max_edge_include_perimeter=not getattr(SETTINGS, "MAX_EDGE_INSIDE_ONLY", True),
+            same_shape_limit=SETTINGS.SAME_SHAPE_LIMIT,
+            enforce_plus_rule=SETTINGS.PLUS_TOGGLE,
+            time_limit_sec=validation_limit,
+        )
+        solver = BacktrackingSolver(
+            request,
+            options,
+            self.unit_ft,
+            "Mask Validation",
+        )
+        return solver.solve() is not None
 
     def _render_mask_from_notches(
         self, width: int, height: int, notches: Sequence[Tuple[str, int, int, int]]
@@ -660,21 +626,6 @@ class TileSolverOrchestrator:
                         mask[row_idx][col_idx] = False
                         removed += 1
         return tuple(tuple(row) for row in mask), removed
-
-    @staticmethod
-    def _has_mirrored_notch(notches: Sequence[Tuple[str, int, int, int]]) -> bool:
-        if not notches:
-            return False
-        counts = Counter(orientation for orientation, _, _, _ in notches)
-        top = counts.get("top", 0)
-        bottom = counts.get("bottom", 0)
-        left = counts.get("left", 0)
-        right = counts.get("right", 0)
-        if (top > 0) != (bottom > 0):
-            return False
-        if (left > 0) != (right > 0):
-            return False
-        return top > 0 or left > 0
 
     def _compute_min_tile_edge(self) -> int:
         edge_lengths: List[int] = []
