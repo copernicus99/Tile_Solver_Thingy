@@ -40,20 +40,32 @@ class MaskBuilder:
         for _ in range(self.config.max_attempts):
             mask = [[True for _ in range(self.width)] for _ in range(self.height)]
             slack_remaining = self.slack
-            orientations = ["horizontal", "vertical"]
-            self.rng.shuffle(orientations)
             failures = 0
             while slack_remaining > 0 and failures < self.config.max_pair_failures:
-                orientation = orientations[0]
-                removed = (
-                    self._place_horizontal_pair(mask, slack_remaining)
-                    if orientation == "horizontal"
-                    else self._place_vertical_pair(mask, slack_remaining)
-                )
+                removed = 0
+
+                if slack_remaining % 2 == 1:
+                    removed = self._place_corner_notch(mask, slack_remaining)
+
+                if removed == 0:
+                    orientations = ["horizontal", "vertical"]
+                    self.rng.shuffle(orientations)
+                    for orientation in orientations:
+                        removed = (
+                            self._place_horizontal_pair(mask, slack_remaining)
+                            if orientation == "horizontal"
+                            else self._place_vertical_pair(mask, slack_remaining)
+                        )
+                        if removed:
+                            break
+
+                if removed == 0:
+                    removed = self._place_corner_notch(mask, slack_remaining)
+
                 if removed == 0:
                     failures += 1
-                    orientations.append(orientations.pop(0))
                     continue
+
                 slack_remaining -= removed
                 failures = 0
             if slack_remaining == 0:
@@ -123,6 +135,55 @@ class MaskBuilder:
                         return len(cells)
                     self._set_cells(mask, cells, True)
         return 0
+
+    def _place_corner_notch(self, mask: List[List[bool]], slack_remaining: int) -> int:
+        if self.width <= 0 or self.height <= 0:
+            return 0
+        max_row_depth = min(self.max_depth, self.height)
+        max_col_depth = min(self.max_depth, self.width)
+        if max_row_depth <= 0 or max_col_depth <= 0:
+            return 0
+
+        row_depths = list(range(1, max_row_depth + 1))
+        col_depths = list(range(1, max_col_depth + 1))
+        self.rng.shuffle(row_depths)
+        self.rng.shuffle(col_depths)
+        corners = ["top_left", "top_right", "bottom_left", "bottom_right"]
+
+        for rows in row_depths:
+            for cols in col_depths:
+                area = rows * cols
+                if area > slack_remaining:
+                    continue
+                self.rng.shuffle(corners)
+                for corner in corners:
+                    cells = self._collect_corner_cells(rows, cols, corner)
+                    if not self._cells_clear(mask, cells):
+                        continue
+                    self._set_cells(mask, cells, False)
+                    if self._respects_edge_limits(mask):
+                        return len(cells)
+                    self._set_cells(mask, cells, True)
+        return 0
+
+    def _collect_corner_cells(
+        self, rows: int, cols: int, corner: str
+    ) -> List[Tuple[int, int]]:
+        cells: List[Tuple[int, int]] = []
+        row_indices = (
+            range(rows)
+            if corner in ("top_left", "top_right")
+            else range(self.height - 1, self.height - rows - 1, -1)
+        )
+        col_indices = (
+            range(cols)
+            if corner in ("top_left", "bottom_left")
+            else range(self.width - 1, self.width - cols - 1, -1)
+        )
+        for row in row_indices:
+            for col in col_indices:
+                cells.append((row, col))
+        return cells
 
     def _collect_horizontal_cells(
         self, start: int, length: int, depth: int
