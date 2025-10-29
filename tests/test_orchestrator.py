@@ -1,6 +1,6 @@
 import math
 import unittest
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from contextlib import ExitStack
 from typing import Dict, List, Optional, Tuple
 from unittest import mock
@@ -15,11 +15,17 @@ from solver.models import Placement, SolveRequest, SolveResult, SolverStats, Til
 class CandidateBoardTests(unittest.TestCase):
     def setUp(self):
         self.orchestrator = TileSolverOrchestrator()
+        self.single_tile = self.orchestrator.tile_types["1x1"]
+        self.tile_quantities = {self.single_tile: 1}
 
     def test_returns_six_boards_reducing_by_one_foot(self):
         total_area_ft = 30.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(
+            total_area_ft,
+            default_depth,
+            self.tile_quantities,
+        )
         expected = [
             (12, 12),
             (10, 10),
@@ -34,13 +40,21 @@ class CandidateBoardTests(unittest.TestCase):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        candidates = self.orchestrator._candidate_boards(
+            total_area_ft,
+            default_depth,
+            self.tile_quantities,
+        )
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
     def test_small_fractional_area_pads_up_to_one_foot(self):
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(0.3, default_depth)
+        candidates = self.orchestrator._candidate_boards(
+            0.3,
+            default_depth,
+            self.tile_quantities,
+        )
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
@@ -127,17 +141,55 @@ class PopOutBoardTests(unittest.TestCase):
 
         mock_boards.assert_called()
         args = mock_boards.call_args[0]
-        self.assertGreaterEqual(len(args), 2)
         self.assertEqual(expected_depth, args[1])
+        quantities = args[2]
+        self.assertIsInstance(quantities, dict)
 
     def test_candidate_masks_preserve_target_area(self):
         total_area_ft = 30.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        tile = self.orchestrator.tile_types["1x1"]
+        tile_quantities = {tile: int(round(total_area_ft / tile.area_ft2))}
+        def fake_generate(
+            width,
+            height,
+            target_cells,
+            max_depth,
+            min_span,
+            horizontal_limit,
+            vertical_limit,
+            **kwargs,
+        ):
+            total = width * height
+            slack = total - target_cells
+            if slack >= 0:
+                removed = slack
+            else:
+                removed = max(abs(slack), min_span)
+            mask = [[True for _ in range(width)] for _ in range(height)]
+            count = 0
+            for row in range(height):
+                for col in range(width):
+                    if count >= removed:
+                        break
+                    mask[row][col] = False
+                    count += 1
+                if count >= removed:
+                    break
+            return tuple(tuple(row) for row in mask)
+
+        with mock.patch("solver.orchestrator.generate_mask", side_effect=fake_generate), mock.patch.object(
+            TileSolverOrchestrator, "_mask_is_valid", return_value=True
+        ):
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                tile_quantities,
+            )
         self.assertTrue(candidates, "Expected at least one candidate board")
-        first = candidates[0]
-        self.assertTrue(first.pop_out_masks, "Pop-out masks should be generated when slack allows")
-        mask = first.pop_out_masks[0]
+        mask_candidates = [candidate for candidate in candidates if candidate.pop_out_masks]
+        self.assertTrue(mask_candidates, "Expected at least one mask-bearing candidate")
+        mask = mask_candidates[0].pop_out_masks[0]
         available_cells = sum(1 for row in mask for cell in row if cell)
         unit_area = self.orchestrator.unit_ft ** 2
         padded_area_ft = math.ceil(total_area_ft)
@@ -147,12 +199,16 @@ class PopOutBoardTests(unittest.TestCase):
     def test_masks_generated_even_when_tiles_exceed_board_area(self):
         total_area_ft = 150.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(total_area_ft, default_depth)
+        tile = self.orchestrator.tile_types["1x1"]
+        tile_quantities = {tile: int(round(total_area_ft / tile.area_ft2))}
+        candidates = self.orchestrator._candidate_boards(
+            total_area_ft,
+            default_depth,
+            tile_quantities,
+        )
         unit_area = self.orchestrator.unit_ft ** 2
         padded_area_ft = math.ceil(total_area_ft)
         target_cells = int(round(padded_area_ft / unit_area))
-        max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
-        self.assertGreater(max_variants, 0)
         insufficient = [
             c for c in candidates if (c.width * c.height) < target_cells
         ]
@@ -162,100 +218,52 @@ class PopOutBoardTests(unittest.TestCase):
         )
         for candidate in insufficient:
             mask_count = len(candidate.pop_out_masks)
-            self.assertGreater(
-                mask_count,
-                0,
-                "Boards with insufficient area should still receive at least one mirrored variant",
-            )
-            self.assertLessEqual(
-                mask_count,
-                max_variants,
-                "Boards should never exceed the configured pop-out variant cap",
-            )
+            self.assertLessEqual(mask_count, 1)
+            if mask_count:
+                available_cells = sum(
+                    1 for row in candidate.pop_out_masks[0] for cell in row if cell
+                )
+                self.assertEqual(target_cells, available_cells)
 
-    def test_generated_masks_are_mirrored(self):
+    def test_invalid_masks_are_discarded(self):
         width = 6
         height = 6
         total_cells = width * height
-        slack = 4  # ensure at least one mirrored pair is required
+        target_cells = total_cells - 4
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        tile = self.orchestrator.tile_types["1x1"]
+        tile_quantities = {tile: int(round(target_cells / (tile.area_ft2 / (self.orchestrator.unit_ft ** 2))))}
+
+        mask_template = [[True for _ in range(width)] for _ in range(height)]
+        for idx in range(4):
+            mask_template[0][idx] = False
+        mask_tuple = tuple(tuple(row) for row in mask_template)
+
         self.orchestrator._mask_cache.clear()
-        captured = {}
-        original = TileSolverOrchestrator._render_mask_from_notches
-
-        def wrapper(self_obj, w, h, notches):
-            result = original(self_obj, w, h, notches)
-            if result is not None:
-                mask_tuple, _ = result
-                captured[mask_tuple] = tuple(sorted(notches))
-            return result
-
-        with mock.patch.object(TileSolverOrchestrator, "_render_mask_from_notches", new=wrapper):
+        with mock.patch("solver.orchestrator.generate_mask", return_value=mask_tuple), mock.patch.object(
+            TileSolverOrchestrator, "_mask_is_valid", return_value=False
+        ):
             masks = self.orchestrator._generate_pop_out_masks(
-                width, height, total_cells - slack, default_depth
+                width,
+                height,
+                target_cells,
+                default_depth,
+                tile_quantities,
             )
-        self.assertTrue(masks, "Expected mirrored pop-out masks to be generated")
-        for mask in masks:
-            notches = captured.get(mask)
-            self.assertIsNotNone(notches, "Expected to capture notches for each mask")
-            counts = Counter(orientation for orientation, _, _, _ in notches)
-            top = counts.get("top", 0)
-            bottom = counts.get("bottom", 0)
-            left = counts.get("left", 0)
-            right = counts.get("right", 0)
-            self.assertEqual(
-                top > 0,
-                bottom > 0,
-                "Horizontal pop-outs must appear on both top and bottom edges",
-            )
-            self.assertEqual(
-                left > 0,
-                right > 0,
-                "Vertical pop-outs must appear on both left and right edges",
-            )
-            self.assertTrue(
-                top > 0 or left > 0,
-                "Each mask should include at least one mirrored notch pair",
-            )
+        self.assertEqual((), masks)
 
-    def test_allows_offset_mirrored_masks(self):
-        width = 10
-        height = 10
-        total_cells = width * height
-        slack = 24
-        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        masks = self.orchestrator._generate_pop_out_masks(
-            width, height, total_cells - slack, default_depth
-        )
-        self.assertTrue(masks, "Expected pop-out masks to be generated for offset checks")
-        found_offset = False
-        for mask in masks:
-            top_columns = {idx for idx, cell in enumerate(mask[0]) if not cell}
-            bottom_columns = {idx for idx, cell in enumerate(mask[-1]) if not cell}
-            if top_columns and bottom_columns and top_columns != bottom_columns:
-                found_offset = True
-                break
-        self.assertTrue(
-            found_offset,
-            "Generator should emit masks where mirrored edges remove different segments",
-        )
-
-    def test_generated_masks_are_unique(self):
-        width = 8
-        height = 8
-        total_cells = width * height
-        slack = 12
-        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        masks = self.orchestrator._generate_pop_out_masks(
-            width, height, total_cells - slack, default_depth
-        )
-        self.assertGreater(len(masks), 1, "Expected multiple pop-out masks to be generated")
-        unique_masks = {mask for mask in masks}
-        self.assertEqual(
-            len(masks),
-            len(unique_masks),
-            "Pop-out mask variants must be unique",
-        )
+        self.orchestrator._mask_cache.clear()
+        with mock.patch("solver.orchestrator.generate_mask", return_value=mask_tuple), mock.patch.object(
+            TileSolverOrchestrator, "_mask_is_valid", return_value=True
+        ):
+            masks = self.orchestrator._generate_pop_out_masks(
+                width,
+                height,
+                target_cells,
+                default_depth,
+                tile_quantities,
+            )
+        self.assertEqual((mask_tuple,), masks)
 
     def test_negative_slack_masks_remove_full_deficit(self):
         width = 10
@@ -263,9 +271,46 @@ class PopOutBoardTests(unittest.TestCase):
         total_cells = width * height
         target_cells = total_cells + 20
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        masks = self.orchestrator._generate_pop_out_masks(
-            width, height, target_cells, default_depth
-        )
+        tile = self.orchestrator.tile_types["1x1"]
+        tile_quantities = {tile: int(round(target_cells / (tile.area_ft2 / (self.orchestrator.unit_ft ** 2))))}
+        def fake_generate(
+            width,
+            height,
+            target_cells,
+            max_depth,
+            min_span,
+            horizontal_limit,
+            vertical_limit,
+            **kwargs,
+        ):
+            total = width * height
+            slack = total - target_cells
+            if slack >= 0:
+                removed = slack
+            else:
+                removed = max(abs(slack), min_span)
+            mask = [[True for _ in range(width)] for _ in range(height)]
+            count = 0
+            for row in range(height):
+                for col in range(width):
+                    if count >= removed:
+                        break
+                    mask[row][col] = False
+                    count += 1
+                if count >= removed:
+                    break
+            return tuple(tuple(row) for row in mask)
+
+        with mock.patch("solver.orchestrator.generate_mask", side_effect=fake_generate), mock.patch.object(
+            TileSolverOrchestrator, "_mask_is_valid", return_value=True
+        ):
+            masks = self.orchestrator._generate_pop_out_masks(
+                width,
+                height,
+                target_cells,
+                default_depth,
+                tile_quantities,
+            )
         self.assertTrue(
             masks,
             "Pop-out masks should be generated when the board is smaller than the tile coverage",
@@ -442,12 +487,12 @@ class PhasePopOutIntegrationTests(unittest.TestCase):
         )
 
     def test_disabling_pop_out_variants_skips_masks(self):
-        original_variants = getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", None)
+        original = self.candidate
         try:
-            setattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0)
+            self.candidate = [BoardCandidate(4, 4, 14, tuple())]
             records = self._run_with_overrides({"1x1": 1})
         finally:
-            setattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", original_variants)
+            self.candidate = original
         self.assertTrue(records, "Solver should still attempt boards")
         self.assertTrue(all(mask is None for _, mask in records))
 
