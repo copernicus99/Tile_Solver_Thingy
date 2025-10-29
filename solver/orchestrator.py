@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -57,6 +58,7 @@ class TileSolverOrchestrator:
             name: TileType(name, dims[0], dims[1]) for name, dims in SETTINGS.TILE_OPTIONS.items()
         }
         self._min_tile_edge_cells = self._compute_min_tile_edge()
+        self._mask_cache: Dict[Tuple[int, int, int, int], Tuple[Tuple[Tuple[bool, ...], ...], ...]] = {}
 
     def solve(
         self,
@@ -471,8 +473,13 @@ class TileSolverOrchestrator:
     def _generate_pop_out_masks(
         self, width: int, height: int, target_cells: int, max_depth: int
     ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
+        cache_key = (width, height, target_cells, max_depth)
+        cached = self._mask_cache.get(cache_key)
+        if cached is not None:
+            return cached
         slack = self._resolve_slack_for_mask(width, height, target_cells, max_depth)
         if slack <= 0:
+            self._mask_cache[cache_key] = ()
             return ()
 
         max_variants = max(getattr(SETTINGS, "MAX_POP_OUT_VARIANTS_PER_BOARD", 0), 0)
@@ -481,11 +488,14 @@ class TileSolverOrchestrator:
 
         if max_depth <= 0:
             return ()
+
         masks: List[Tuple[Tuple[bool, ...], ...]] = []
         seen: Set[Tuple[Tuple[bool, ...], ...]] = set()
 
-        def build_mask(notches: Sequence[Tuple[str, int, int]]) -> None:
+        def build_mask(notches: Sequence[Tuple[str, int, int, int]]) -> None:
             if len(masks) >= max_variants:
+                return
+            if not notches:
                 return
             if not self._has_mirrored_notch(notches):
                 return
@@ -513,60 +523,125 @@ class TileSolverOrchestrator:
             "right": width,
         }
 
-        opposite_pairs = (("top", "bottom"), ("left", "right"))
+        def sort_notches(notches: Sequence[Tuple[str, int, int, int]]) -> Tuple[Tuple[str, int, int, int], ...]:
+            order = {"top": 0, "bottom": 1, "left": 2, "right": 3}
+            return tuple(sorted(notches, key=lambda item: (order[item[0]], item[3], item[1], item[2])))
 
-        def enumerate_symmetrical_options(pair: Tuple[str, str]) -> List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]]:
-            first, second = pair
-            depth_limit = min(
-                max_depth,
-                orientation_depth_limits[first],
-                orientation_depth_limits[second],
-            )
-            dim = min(orientation_dims[first], orientation_dims[second])
-            options: List[Tuple[Tuple[str, int, int], Tuple[str, int, int], int]] = []
-            for depth in range(1, depth_limit + 1):
-                max_length = min(dim, slack // (2 * depth))
-                for length in range(1, max_length + 1):
-                    removed = 2 * depth * length
-                    if removed <= 0 or removed > slack:
+        def enumerate_orientation_layouts(
+            orientation: str,
+        ) -> Dict[int, List[Tuple[Tuple[str, int, int, int], ...]]]:
+            depth_limit = min(max_depth, orientation_depth_limits[orientation])
+            dim = orientation_dims[orientation]
+            layouts: Dict[int, List[Tuple[Tuple[str, int, int, int], ...]]] = defaultdict(list)
+            layout_cap = max(1, max_variants)
+            if depth_limit <= 0 or dim <= 0:
+                layouts[0].append(tuple())
+                return layouts
+
+            max_notches = max(1, min(slack if slack > 0 else 0, dim, 8))
+
+            def backtrack(
+                start_index: int,
+                used_mask: int,
+                removed: int,
+                placements: Tuple[Tuple[str, int, int, int], ...],
+                notch_count: int,
+            ) -> None:
+                if notch_count > max_notches:
+                    return
+                options = layouts[removed]
+                if len(options) < layout_cap:
+                    options.append(placements)
+                if removed >= slack:
+                    return
+                for start in range(start_index, dim):
+                    if used_mask & (1 << start):
                         continue
-                    options.append(((first, depth, length), (second, depth, length), removed))
-            return options
+                    max_length = 0
+                    while (
+                        start + max_length < dim
+                        and not (used_mask & (1 << (start + max_length)))
+                    ):
+                        max_length += 1
+                    if max_length <= 0:
+                        continue
+                    for depth in range(1, depth_limit + 1):
+                        remaining_slack = slack - removed
+                        max_length_for_depth = min(
+                            max_length,
+                            remaining_slack // depth if remaining_slack > 0 else 0,
+                        )
+                        if max_length_for_depth <= 0:
+                            continue
+                        for length in range(1, max_length_for_depth + 1):
+                            segment_mask = ((1 << length) - 1) << start
+                            if used_mask & segment_mask:
+                                continue
+                            removed_cells = depth * length
+                            new_removed = removed + removed_cells
+                            new_notches = placements + ((orientation, depth, length, start),)
+                            backtrack(
+                                start + length,
+                                used_mask | segment_mask,
+                                new_removed,
+                                new_notches,
+                                notch_count + 1,
+                            )
 
-        pair_options = {pair: enumerate_symmetrical_options(pair) for pair in opposite_pairs}
+            backtrack(0, 0, 0, tuple(), 0)
+            return layouts
 
-        for pair in opposite_pairs:
-            for first_notch, second_notch, removed in pair_options[pair]:
-                if removed == slack:
-                    build_mask((first_notch, second_notch))
-                if len(masks) >= max_variants:
-                    return tuple(masks)
+        top_layouts = enumerate_orientation_layouts("top")
+        bottom_layouts = enumerate_orientation_layouts("bottom")
+        left_layouts = enumerate_orientation_layouts("left")
+        right_layouts = enumerate_orientation_layouts("right")
 
-        horizontal_pair = opposite_pairs[0]
-        vertical_pair = opposite_pairs[1]
-        for h_first, h_second, h_removed in pair_options[horizontal_pair]:
-            for v_first, v_second, v_removed in pair_options[vertical_pair]:
-                if h_removed + v_removed != slack:
+        for top_removed, top_options in top_layouts.items():
+            for bottom_removed, bottom_options in bottom_layouts.items():
+                horizontal_removed = top_removed + bottom_removed
+                if horizontal_removed > slack:
                     continue
-                build_mask((h_first, h_second, v_first, v_second))
-                if len(masks) >= max_variants:
-                    return tuple(masks)
+                for left_removed, left_options in left_layouts.items():
+                    total_horizontal_vertical = horizontal_removed + left_removed
+                    if total_horizontal_vertical > slack:
+                        continue
+                    for right_removed, right_options in right_layouts.items():
+                        total_removed = total_horizontal_vertical + right_removed
+                        if total_removed != slack:
+                            continue
+                        for top_notches in top_options:
+                            for bottom_notches in bottom_options:
+                                for left_notches in left_options:
+                                    for right_notches in right_options:
+                                        combined = sort_notches(
+                                            top_notches
+                                            + bottom_notches
+                                            + left_notches
+                                            + right_notches
+                                        )
+                                        build_mask(combined)
+                                        if len(masks) >= max_variants:
+                                            return tuple(masks)
 
-        return tuple(masks)
+        result = tuple(masks)
+        self._mask_cache[cache_key] = result
+        return result
 
     def _render_mask_from_notches(
-        self, width: int, height: int, notches: Sequence[Tuple[str, int, int]]
+        self, width: int, height: int, notches: Sequence[Tuple[str, int, int, int]]
     ) -> Optional[Tuple[Tuple[Tuple[bool, ...], ...], int]]:
         mask = [[True for _ in range(width)] for _ in range(height)]
         removed = 0
-        for orientation, depth, length in notches:
+        for orientation, depth, length, start in notches:
             if orientation in ("top", "bottom"):
                 if depth > height or length > width:
+                    return None
+                if start < 0 or start + length > width:
                     return None
                 for offset in range(depth):
                     row_idx = offset if orientation == "top" else height - 1 - offset
                     for col in range(length):
-                        col_idx = col if orientation == "top" else width - 1 - col
+                        col_idx = start + col
                         if not mask[row_idx][col_idx]:
                             return None
                         mask[row_idx][col_idx] = False
@@ -574,10 +649,12 @@ class TileSolverOrchestrator:
             else:
                 if depth > width or length > height:
                     return None
+                if start < 0 or start + length > height:
+                    return None
                 for offset in range(depth):
                     col_idx = offset if orientation == "left" else width - 1 - offset
                     for row in range(length):
-                        row_idx = row if orientation == "left" else height - 1 - row
+                        row_idx = start + row
                         if not mask[row_idx][col_idx]:
                             return None
                         mask[row_idx][col_idx] = False
@@ -585,12 +662,19 @@ class TileSolverOrchestrator:
         return tuple(tuple(row) for row in mask), removed
 
     @staticmethod
-    def _has_mirrored_notch(notches: Sequence[Tuple[str, int, int]]) -> bool:
-        orientations = {orientation for orientation, _, _ in notches}
-        return (
-            {"top", "bottom"}.issubset(orientations)
-            or {"left", "right"}.issubset(orientations)
-        )
+    def _has_mirrored_notch(notches: Sequence[Tuple[str, int, int, int]]) -> bool:
+        if not notches:
+            return False
+        counts = Counter(orientation for orientation, _, _, _ in notches)
+        top = counts.get("top", 0)
+        bottom = counts.get("bottom", 0)
+        left = counts.get("left", 0)
+        right = counts.get("right", 0)
+        if (top > 0) != (bottom > 0):
+            return False
+        if (left > 0) != (right > 0):
+            return False
+        return top > 0 or left > 0
 
     def _compute_min_tile_edge(self) -> int:
         edge_lengths: List[int] = []
@@ -620,11 +704,15 @@ class TileSolverOrchestrator:
         self, width: int, height: int, target_cells: int, max_depth: int
     ) -> int:
         slack = width * height - target_cells
-        if slack > 0:
-            return slack
+        if slack == 0:
+            return 0
         if max_depth <= 0:
             return 0
-        return self._minimum_mask_span(width, height)
+        minimum = self._minimum_mask_span(width, height)
+        required = abs(slack)
+        if minimum > 0:
+            required = max(required, minimum)
+        return required
 
 
 __all__ = ["TileSolverOrchestrator", "PhaseLog", "PhaseAttempt", "BoardCandidate"]
