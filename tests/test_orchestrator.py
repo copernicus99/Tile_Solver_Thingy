@@ -1,6 +1,6 @@
 import math
 import unittest
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from contextlib import ExitStack
 from typing import Dict, List, Optional, Tuple
 from unittest import mock
@@ -179,24 +179,66 @@ class PopOutBoardTests(unittest.TestCase):
         total_cells = width * height
         slack = 4  # ensure at least one mirrored pair is required
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        self.orchestrator._mask_cache.clear()
+        captured = {}
+        original = TileSolverOrchestrator._render_mask_from_notches
+
+        def wrapper(self_obj, w, h, notches):
+            result = original(self_obj, w, h, notches)
+            if result is not None:
+                mask_tuple, _ = result
+                captured[mask_tuple] = tuple(sorted(notches))
+            return result
+
+        with mock.patch.object(TileSolverOrchestrator, "_render_mask_from_notches", new=wrapper):
+            masks = self.orchestrator._generate_pop_out_masks(
+                width, height, total_cells - slack, default_depth
+            )
+        self.assertTrue(masks, "Expected mirrored pop-out masks to be generated")
+        for mask in masks:
+            notches = captured.get(mask)
+            self.assertIsNotNone(notches, "Expected to capture notches for each mask")
+            counts = Counter(orientation for orientation, _, _, _ in notches)
+            top = counts.get("top", 0)
+            bottom = counts.get("bottom", 0)
+            left = counts.get("left", 0)
+            right = counts.get("right", 0)
+            self.assertEqual(
+                top > 0,
+                bottom > 0,
+                "Horizontal pop-outs must appear on both top and bottom edges",
+            )
+            self.assertEqual(
+                left > 0,
+                right > 0,
+                "Vertical pop-outs must appear on both left and right edges",
+            )
+            self.assertTrue(
+                top > 0 or left > 0,
+                "Each mask should include at least one mirrored notch pair",
+            )
+
+    def test_allows_offset_mirrored_masks(self):
+        width = 10
+        height = 10
+        total_cells = width * height
+        slack = 24
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
         masks = self.orchestrator._generate_pop_out_masks(
             width, height, total_cells - slack, default_depth
         )
-        self.assertTrue(masks, "Expected mirrored pop-out masks to be generated")
+        self.assertTrue(masks, "Expected pop-out masks to be generated for offset checks")
+        found_offset = False
         for mask in masks:
-            removed = set()
-            for r, row in enumerate(mask):
-                for c, cell in enumerate(row):
-                    if not cell:
-                        removed.add((r, c))
-            self.assertTrue(removed, "Each mask should remove mirrored cells")
-            for r, c in removed:
-                mirror = (height - 1 - r, width - 1 - c)
-            self.assertIn(
-                mirror,
-                removed,
-                "Pop-out masks must remove cells in mirrored pairs across the board",
-            )
+            top_columns = {idx for idx, cell in enumerate(mask[0]) if not cell}
+            bottom_columns = {idx for idx, cell in enumerate(mask[-1]) if not cell}
+            if top_columns and bottom_columns and top_columns != bottom_columns:
+                found_offset = True
+                break
+        self.assertTrue(
+            found_offset,
+            "Generator should emit masks where mirrored edges remove different segments",
+        )
 
     def test_generated_masks_are_unique(self):
         width = 8
@@ -215,7 +257,7 @@ class PopOutBoardTests(unittest.TestCase):
             "Pop-out mask variants must be unique",
         )
 
-    def test_fallback_masks_use_minimum_tile_span(self):
+    def test_negative_slack_masks_remove_full_deficit(self):
         width = 10
         height = 10
         total_cells = width * height
@@ -224,16 +266,46 @@ class PopOutBoardTests(unittest.TestCase):
         masks = self.orchestrator._generate_pop_out_masks(
             width, height, target_cells, default_depth
         )
-        self.assertTrue(masks, "Fallback pop-out masks should be generated when slack is absent")
-        expected_removed = self.orchestrator._minimum_mask_span(width, height)
+        self.assertTrue(
+            masks,
+            "Pop-out masks should be generated when the board is smaller than the tile coverage",
+        )
+        raw_deficit = abs(total_cells - target_cells)
+        minimum_span = self.orchestrator._minimum_mask_span(width, height)
+        expected_removed = max(raw_deficit, minimum_span)
         for mask in masks:
             available = sum(1 for row in mask for cell in row if cell)
             removed = total_cells - available
             self.assertEqual(
                 expected_removed,
                 removed,
-                "Fallback pop-out masks must remove the minimum mirrored span",
+                "Pop-out masks should remove the larger of the true deficit or the minimum mirrored span",
             )
+
+    def test_render_mask_accepts_offset_mirrored_notches(self):
+        width = 10
+        height = 10
+        notches = (
+            ("top", 1, 2, 3),
+            ("bottom", 1, 2, 3),
+            ("left", 1, 2, 4),
+            ("right", 1, 2, 4),
+        )
+        rendered = self.orchestrator._render_mask_from_notches(width, height, notches)
+        self.assertIsNotNone(rendered, "Offset mirrored notches should render successfully")
+        mask, removed = rendered  # type: ignore[misc]
+        self.assertEqual(removed, 8)
+        # Ensure the removed cells include interior offsets rather than just corners.
+        removed_cells = {
+            (r, c)
+            for r, row in enumerate(mask)
+            for c, cell in enumerate(row)
+            if not cell
+        }
+        self.assertIn((0, 3), removed_cells)
+        self.assertIn((height - 1, 3), removed_cells)
+        self.assertIn((4, 0), removed_cells)
+        self.assertIn((4, width - 1), removed_cells)
 
 
 class SolverOptionTests(unittest.TestCase):
