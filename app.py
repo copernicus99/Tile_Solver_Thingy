@@ -129,7 +129,7 @@ class RunLogWriter:
         elif event_type == "attempt_started":
             idx = event.get("attempt_index")
             board = event.get("board_size_ft") or (None, None)
-            variant_label = event.get("variant_label") or "Initial"
+            variant_label = event.get("variant_label") or "Square Fit"
             lines.append(
                 "Attempt {idx} started on board {w:.2f}ft x {h:.2f}ft ({variant}).".format(
                     idx=idx,
@@ -144,7 +144,7 @@ class RunLogWriter:
             elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
             success = "yes" if event.get("success") else "no"
             backtracks = event.get("backtracks")
-            variant_label = event.get("variant_label") or "Initial"
+            variant_label = event.get("variant_label") or "Square Fit"
             lines.append(
                 "Attempt {idx} ({variant}) completed in {elapsed} (success: {success}, backtracks: {backtracks}).".format(
                     idx=idx,
