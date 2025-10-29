@@ -1,71 +1,59 @@
 TILE SOLVER RUN LOG
-Generated at: 2025-10-28T18:33:24-04:00
+Generated at: 2025-10-29T11:52:52-04:00
 MAX_EDGE_FT=6.0
 PLUS_TOGGLE=True
 SAME_SHAPE_LIMIT=1
 Tile counts:
-  - 1x1: 9 (1.0ft × 1.0ft)
-  - 1x1.5: 10 (1.0ft × 1.5ft)
-  - 1x2: 7 (1.0ft × 2.0ft)
-  - 1.5x1.5: 6 (1.5ft × 1.5ft)
+  - 1x1: 5 (1.0ft × 1.0ft)
+  - 1x1.5: 5 (1.0ft × 1.5ft)
+  - 1x2: 5 (1.0ft × 2.0ft)
+  - 1.5x1.5: 5 (1.5ft × 1.5ft)
   - 1.5x2: 4 (1.5ft × 2.0ft)
-  - 1.5x2.5: 5 (1.5ft × 2.5ft)
-  - 1.5x3: 1 (1.5ft × 3.0ft)
+  - 1.5x2.5: 4 (1.5ft × 2.5ft)
+  - 1.5x3: 4 (1.5ft × 3.0ft)
   - 2x2: 3 (2.0ft × 2.0ft)
-  - 2x2.5: 1 (2.0ft × 2.5ft)
-  - 2x3: 1 (2.0ft × 3.0ft)
-  Total tiles: 47
-  Total coverage: 109.75 ft²
+  - 2x2.5: 2 (2.0ft × 2.5ft)
+  - 2x3: 2 (2.0ft × 3.0ft)
+  Total tiles: 39
+  Total coverage: 112.75 ft²
 
 Events:
 Run started.
   Phase 1: Phase C (time limit: 1200.00s, rotation: yes, discards: no, pop-outs: no)
   Phase 2: Phase D (time limit: 1800.00s, rotation: yes, discards: yes, pop-outs: yes)
   Total allotted time: 3000.00s
-
 Phase 1 (Phase C) started. Time limit: 1200.00s.
 Attempt 1 started on board 11.00ft x 11.00ft (Initial).
-Attempt 1 (Initial) completed in 1208.31s (success: no, backtracks: 1024724).
-Phase Phase C completed in 1208.32s (success: no).
-
+Attempt 1 (Initial) completed in 1200.03s (success: no, backtracks: 2538511).
+Phase Phase C completed in 1200.03s (success: no).
 Phase 2 (Phase D) started. Time limit: 1800.00s.
 Attempt 1 started on board 11.00ft x 11.00ft (Initial).
-Attempt 1 (Initial) completed in 360.08s (success: no, backtracks: 124969).
-Attempt 2 started on board 11.00ft x 11.00ft (Mask 1).
-Attempt 2 (Mask 1) completed in 75.86s (success: no, backtracks: 55305).
-Attempt 3 started on board 11.00ft x 11.00ft (Mask 2).
-Attempt 3 (Mask 2) completed in 75.85s (success: no, backtracks: 55377).
-Attempt 4 started on board 11.00ft x 11.00ft (Mask 3).
-Attempt 4 (Mask 3) completed in 75.85s (success: no, backtracks: 54508).
-Attempt 5 started on board 11.00ft x 11.00ft (Mask 4).
-Attempt 5 (Mask 4) completed in 75.86s (success: no, backtracks: 56451).
-Attempt 6 started on board 10.00ft x 10.00ft (Initial).
-Attempt 6 (Initial) completed in 75.85s (success: no, backtracks: 60590).
-Attempt 7 started on board 10.00ft x 10.00ft (Mask 1).
-Attempt 7 (Mask 1) completed in 75.85s (success: no, backtracks: 69540).
-Attempt 8 started on board 10.00ft x 10.00ft (Mask 2).
-Attempt 8 (Mask 2) completed in 75.84s (success: no, backtracks: 63883).
-Attempt 9 started on board 9.00ft x 9.00ft (Initial).
-Attempt 9 (Initial) completed in 1334.74s (success: no, backtracks: 69770).
-Phase Phase D completed in 2225.82s (success: no).
-
-Run completed in 3434.14s (success: no).
+Attempt 1 (Initial) completed in 360.03s (success: no, backtracks: 754948).
+Attempt 2 started on board 10.00ft x 10.00ft (Initial).
+Attempt 2 (Initial) completed in 288.01s (success: no, backtracks: 685061).
+Attempt 3 started on board 9.00ft x 9.00ft (Initial).
+Attempt 3 (Initial) completed in 288.02s (success: no, backtracks: 731905).
+Attempt 4 started on board 8.00ft x 8.00ft (Initial).
+Attempt 4 (Initial) completed in 288.01s (success: no, backtracks: 812940).
+Attempt 5 started on board 7.00ft x 7.00ft (Initial).
+Attempt 5 (Initial) completed in 288.01s (success: no, backtracks: 901414).
+Attempt 6 started on board 6.00ft x 6.00ft (Initial).
+Attempt 6 (Initial) completed in 287.91s (success: no, backtracks: 1084342).
+Phase Phase D completed in 1800.00s (success: no).
+Run completed in 3002.50s (success: no).
 
 Summary:
 Phase C
-  Total elapsed: 1208.32s
-  Board 11.00ft x 11.00ft (Initial) | elapsed=1208.31s | backtracks=1024724 | success=no
+  Total elapsed: 1200.03s
+  Board 11.00ft x 11.00ft (Initial) | elapsed=1200.03s | backtracks=2538511 | success=no
 
 Phase D
-  Total elapsed: 2225.82s
-  Board 11.00ft x 11.00ft (Initial) | elapsed=360.08s | backtracks=124969 | success=no
-  Board 11.00ft x 11.00ft (Mask 1) | elapsed=75.86s | backtracks=55305 | success=no
-  Board 11.00ft x 11.00ft (Mask 2) | elapsed=75.85s | backtracks=55377 | success=no
-  Board 11.00ft x 11.00ft (Mask 3) | elapsed=75.85s | backtracks=54508 | success=no
-  Board 11.00ft x 11.00ft (Mask 4) | elapsed=75.86s | backtracks=56451 | success=no
-  Board 10.00ft x 10.00ft (Initial) | elapsed=75.85s | backtracks=60590 | success=no
-  Board 10.00ft x 10.00ft (Mask 1) | elapsed=75.85s | backtracks=69540 | success=no
-  Board 10.00ft x 10.00ft (Mask 2) | elapsed=75.84s | backtracks=63883 | success=no
-  Board 9.00ft x 9.00ft (Initial) | elapsed=1334.74s | backtracks=69770 | success=no
+  Total elapsed: 1800.00s
+  Board 11.00ft x 11.00ft (Initial) | elapsed=360.03s | backtracks=754948 | success=no
+  Board 10.00ft x 10.00ft (Initial) | elapsed=288.01s | backtracks=685061 | success=no
+  Board 9.00ft x 9.00ft (Initial) | elapsed=288.02s | backtracks=731905 | success=no
+  Board 8.00ft x 8.00ft (Initial) | elapsed=288.01s | backtracks=812940 | success=no
+  Board 7.00ft x 7.00ft (Initial) | elapsed=288.01s | backtracks=901414 | success=no
+  Board 6.00ft x 6.00ft (Initial) | elapsed=287.91s | backtracks=1084342 | success=no
 
 Run completed without a solution.
