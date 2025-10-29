@@ -419,6 +419,7 @@ class TileSolverOrchestrator:
         *,
         allow_overage_without_popouts: bool = False,
     ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
+        yielded_initial_boards: Set[Tuple[int, int]] = set()
         for candidate in candidates:
             board_area = candidate.width * candidate.height
             target = candidate.target_cells
@@ -430,6 +431,16 @@ class TileSolverOrchestrator:
                 and not allow_overage_without_popouts
             ):
                 continue
+            if (
+                allow_overage_without_popouts
+                and not allow_pop_outs
+                and board_area != target
+            ):
+                continue
+            board_key = (candidate.width, candidate.height)
+            if board_key in yielded_initial_boards:
+                continue
+            yielded_initial_boards.add(board_key)
             yield candidate.width, candidate.height, None, None
             if not allow_pop_outs:
                 continue

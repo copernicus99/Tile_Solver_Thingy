@@ -74,7 +74,7 @@ class PhaseBoardAttemptTests(unittest.TestCase):
         )
         self.assertFalse(attempts, "Oversized boards should be skipped when overage is disallowed")
 
-    def test_phases_a_and_c_allow_oversized_boards_without_pop_outs(self):
+    def test_phases_a_and_c_skip_oversized_boards_even_with_overage_flag(self):
         candidate = BoardCandidate(width=10, height=10, target_cells=80, pop_out_masks=())
         attempts = list(
             self.orchestrator._phase_board_attempts(
@@ -84,10 +84,24 @@ class PhaseBoardAttemptTests(unittest.TestCase):
                 allow_overage_without_popouts=True,
             )
         )
-        self.assertEqual(
-            [(candidate.width, candidate.height, None, None)],
+        self.assertFalse(
             attempts,
-            "Oversized boards should be attempted when overage is allowed",
+            "Oversized boards should be skipped even when overage flag is set",
+        )
+
+    def test_phase_board_attempts_deduplicate_candidate_boards(self):
+        duplicate = BoardCandidate(width=10, height=10, target_cells=100, pop_out_masks=())
+        attempts = list(
+            self.orchestrator._phase_board_attempts(
+                [duplicate, duplicate],
+                allow_pop_outs=False,
+                allow_discards=False,
+            )
+        )
+        self.assertEqual(
+            [(duplicate.width, duplicate.height, None, None)],
+            attempts,
+            "Duplicate board candidates should result in a single attempt",
         )
 
     def test_solve_marks_phases_a_and_c_for_oversized_board_attempts(self):
