@@ -112,7 +112,7 @@ class PhaseBoardAttemptTests(unittest.TestCase):
             )
         )
         self.assertEqual(
-            [(duplicate.width, duplicate.height, None, None)],
+            [(duplicate.width, duplicate.height, None, None, None)],
             attempts,
             "Duplicate board candidates should result in a single attempt",
         )
@@ -268,7 +268,7 @@ class PopOutBoardTests(unittest.TestCase):
         with mock.patch("solver.orchestrator.generate_mask", return_value=mask_tuple), mock.patch.object(
             TileSolverOrchestrator, "_mask_is_valid", return_value=False
         ):
-            masks = self.orchestrator._generate_pop_out_masks(
+            masks, reason = self.orchestrator._generate_pop_out_masks(
                 width,
                 height,
                 target_cells,
@@ -276,12 +276,13 @@ class PopOutBoardTests(unittest.TestCase):
                 tile_quantities,
             )
         self.assertEqual((), masks)
+        self.assertIsNotNone(reason)
 
         self.orchestrator._mask_cache.clear()
         with mock.patch("solver.orchestrator.generate_mask", return_value=mask_tuple), mock.patch.object(
             TileSolverOrchestrator, "_mask_is_valid", return_value=True
         ):
-            masks = self.orchestrator._generate_pop_out_masks(
+            masks, reason = self.orchestrator._generate_pop_out_masks(
                 width,
                 height,
                 target_cells,
@@ -289,6 +290,7 @@ class PopOutBoardTests(unittest.TestCase):
                 tile_quantities,
             )
         self.assertEqual((mask_tuple,), masks)
+        self.assertIsNone(reason)
 
     def test_negative_slack_masks_remove_full_deficit(self):
         width = 10
@@ -329,7 +331,7 @@ class PopOutBoardTests(unittest.TestCase):
         with mock.patch("solver.orchestrator.generate_mask", side_effect=fake_generate), mock.patch.object(
             TileSolverOrchestrator, "_mask_is_valid", return_value=True
         ):
-            masks = self.orchestrator._generate_pop_out_masks(
+            masks, reason = self.orchestrator._generate_pop_out_masks(
                 width,
                 height,
                 target_cells,
@@ -340,6 +342,7 @@ class PopOutBoardTests(unittest.TestCase):
             masks,
             "Pop-out masks should be generated when the board is smaller than the tile coverage",
         )
+        self.assertIsNone(reason)
         raw_deficit = abs(total_cells - target_cells)
         minimum_span = self.orchestrator._minimum_mask_span(width, height)
         expected_removed = max(raw_deficit, minimum_span)
