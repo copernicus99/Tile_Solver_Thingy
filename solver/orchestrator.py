@@ -456,45 +456,56 @@ class TileSolverOrchestrator:
         if total_area_ft <= 0:
             return []
 
-        padded_area_ft = math.ceil(total_area_ft)
-        if padded_area_ft <= 0:
-            return []
-
         unit_area = self.unit_ft ** 2
-        cells_area = padded_area_ft / unit_area
-        area_cells = int(round(cells_area))
-        if area_cells <= 0:
+        cells_area = total_area_ft / unit_area
+        target_cells = int(round(cells_area))
+        if target_cells <= 0:
             return []
-        if not math.isclose(cells_area, area_cells, rel_tol=0.0, abs_tol=1e-9):
+        if not math.isclose(cells_area, target_cells, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError(
                 "Total tile coverage must align to the grid size. Adjust tile quantities to form a square grid."
             )
 
-        starting_side_ft = max(1, int(math.ceil(math.sqrt(padded_area_ft))))
+        inverse_unit = 1.0 / self.unit_ft
+        cells_per_foot = int(round(inverse_unit))
+        if cells_per_foot <= 0 or not math.isclose(inverse_unit, cells_per_foot, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("GRID_UNIT_FT must evenly divide one foot to build boards.")
 
-        def ft_to_cells(feet: int) -> int:
-            cells = feet / self.unit_ft
-            rounded = int(round(cells))
-            if rounded <= 0:
-                return 1
-            if not math.isclose(cells, rounded, rel_tol=0.0, abs_tol=1e-9):
-                raise ValueError(
-                    "Board dimensions must align with the grid size defined by GRID_UNIT_FT."
-                )
-            return rounded
+        min_side = max(1, cells_per_foot)
+        starting_side_cells = max(min_side, int(math.ceil(math.sqrt(target_cells))))
 
         boards: List[BoardCandidate] = []
-        for reduction in range(6):
-            side_ft = max(1, starting_side_ft - reduction)
-            cells = ft_to_cells(side_ft)
+        seen_rectangles: Set[Tuple[int, int]] = set()
+
+        def add_candidate(width_cells: int, height_cells: int) -> None:
             pop_out_masks = self._generate_pop_out_masks(
-                cells,
-                cells,
-                area_cells,
+                width_cells,
+                height_cells,
+                target_cells,
                 max_pop_out_depth,
                 tile_quantities,
             )
-            boards.append(BoardCandidate(cells, cells, area_cells, pop_out_masks))
+            boards.append(BoardCandidate(width_cells, height_cells, target_cells, pop_out_masks))
+
+        for reduction in range(6):
+            side_cells = starting_side_cells - reduction * cells_per_foot
+            if side_cells < min_side:
+                side_cells = min_side
+            add_candidate(side_cells, side_cells)
+
+        if getattr(SETTINGS, "ALLOW_RECTANGLES", False):
+            max_height = int(math.sqrt(target_cells))
+            for height_cells in range(min_side, max_height + 1):
+                if target_cells % height_cells != 0:
+                    continue
+                width_cells = target_cells // height_cells
+                if width_cells < min_side or width_cells == height_cells:
+                    continue
+                key = (width_cells, height_cells)
+                if key in seen_rectangles:
+                    continue
+                seen_rectangles.add(key)
+                add_candidate(width_cells, height_cells)
 
         return boards
 
