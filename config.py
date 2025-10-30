@@ -54,6 +54,8 @@ class Settings:
     MASK_VALIDATION_ATTEMPTS = 2
     MASK_VALIDATION_TIME_LIMIT = 3.0
 
+    ALLOW_RECTANGLES = False
+
     PHASE_A = PhaseConfig(
         "Phase A",
         allow_rotation=True,

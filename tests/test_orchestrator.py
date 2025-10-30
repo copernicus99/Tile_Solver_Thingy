@@ -27,11 +27,11 @@ class CandidateBoardTests(unittest.TestCase):
             self.tile_quantities,
         )
         expected = [
-            (12, 12),
-            (10, 10),
-            (8, 8),
-            (6, 6),
-            (4, 4),
+            (11, 11),
+            (9, 9),
+            (7, 7),
+            (5, 5),
+            (3, 3),
             (2, 2),
         ]
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
@@ -48,15 +48,28 @@ class CandidateBoardTests(unittest.TestCase):
         expected = [(2, 2)] * 6
         self.assertEqual(expected, [(c.width, c.height) for c in candidates])
 
-    def test_small_fractional_area_pads_up_to_one_foot(self):
+    def test_small_fractional_area_must_align_to_grid(self):
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(
-            0.3,
-            default_depth,
-            self.tile_quantities,
-        )
-        expected = [(2, 2)] * 6
-        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
+        with self.assertRaises(ValueError):
+            self.orchestrator._candidate_boards(
+                0.3,
+                default_depth,
+                self.tile_quantities,
+            )
+
+    def test_generates_rectangle_boards_when_enabled(self):
+        total_area_ft = 120.0  # 480 cells -> factors beyond squares
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+        with mock.patch.object(SETTINGS, "ALLOW_RECTANGLES", True):
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                self.tile_quantities,
+            )
+        rectangle_dims = {(c.width, c.height) for c in candidates if c.width != c.height}
+        self.assertIn((60, 8), rectangle_dims)
+        self.assertIn((40, 12), rectangle_dims)
+        self.assertTrue(all(width >= height for width, height in rectangle_dims))
 
 
 class PhaseBoardAttemptTests(unittest.TestCase):
@@ -206,8 +219,7 @@ class PopOutBoardTests(unittest.TestCase):
         mask = mask_candidates[0].pop_out_masks[0]
         available_cells = sum(1 for row in mask for cell in row if cell)
         unit_area = self.orchestrator.unit_ft ** 2
-        padded_area_ft = math.ceil(total_area_ft)
-        target_cells = int(round(padded_area_ft / unit_area))
+        target_cells = int(round(total_area_ft / unit_area))
         self.assertEqual(target_cells, available_cells)
 
     def test_masks_generated_even_when_tiles_exceed_board_area(self):
@@ -221,8 +233,7 @@ class PopOutBoardTests(unittest.TestCase):
             tile_quantities,
         )
         unit_area = self.orchestrator.unit_ft ** 2
-        padded_area_ft = math.ceil(total_area_ft)
-        target_cells = int(round(padded_area_ft / unit_area))
+        target_cells = int(round(total_area_ft / unit_area))
         insufficient = [
             c for c in candidates if (c.width * c.height) < target_cells
         ]
