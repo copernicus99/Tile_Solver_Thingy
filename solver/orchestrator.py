@@ -37,9 +37,12 @@ class PhaseAttempt:
     variant_kind: str = "initial"
     variant_index: Optional[int] = None
     notes: Optional[str] = None
+    variant_label_text: Optional[str] = None
 
     @property
     def variant_label(self) -> str:
+        if self.variant_label_text:
+            return self.variant_label_text
         if self.variant_kind == "mask":
             if self.variant_index is not None:
                 return f"Mask {self.variant_index}"
@@ -158,11 +161,16 @@ class TileSolverOrchestrator:
                     remaining_time = None
                     attempt_limit = None
                 variant_kind = "mask" if mask is not None else "initial"
-                variant_label = (
-                    "Square Fit"
-                    if variant_kind == "initial"
-                    else (f"Mask {mask_index}" if mask_index is not None else "Mask")
-                )
+                if variant_kind == "initial":
+                    variant_label = (
+                        "Square Fit w Discard"
+                        if phase.allow_discards
+                        else "Square Fit"
+                    )
+                else:
+                    variant_label = (
+                        f"Mask {mask_index}" if mask_index is not None else "Mask"
+                    )
                 request = SolveRequest(
                     tile_quantities,
                     board_w,
@@ -256,6 +264,7 @@ class TileSolverOrchestrator:
                     variant_kind=variant_kind,
                     variant_index=mask_index,
                     notes=note,
+                    variant_label_text=variant_label,
                 )
                 attempts.append(attempt)
                 phase_elapsed = time.time() - phase_start
