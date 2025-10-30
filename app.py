@@ -202,6 +202,8 @@ class RunLogWriter:
                         success="yes" if attempt.success else "no",
                     )
                 )
+                if attempt.notes:
+                    lines.append(f"    Note: {attempt.notes}")
             if phase_log.result:
                 lines.append("  Result achieved")
                 if phase_log.result.discarded_tiles:
@@ -602,6 +604,8 @@ def _write_log(path: Path, logs: List[PhaseLog]) -> None:
             lines.append(
                 f"  Board {width_ft:.2f}ft x {height_ft:.2f}ft ({attempt.variant_label}) | elapsed={attempt.elapsed:.2f}s | backtracks={attempt.backtracks} | success={'yes' if attempt.success else 'no'}"
             )
+            if attempt.notes:
+                lines.append(f"    Note: {attempt.notes}")
         if phase_log.result:
             lines.append("  Result achieved")
         lines.append("")

@@ -23,6 +23,7 @@ class BoardCandidate:
     height: int
     target_cells: int
     pop_out_masks: Tuple[Tuple[Tuple[bool, ...], ...], ...]
+    mask_reason: Optional[str] = None
 
 
 @dataclass
@@ -35,6 +36,7 @@ class PhaseAttempt:
     success: bool
     variant_kind: str = "initial"
     variant_index: Optional[int] = None
+    notes: Optional[str] = None
 
     @property
     def variant_label(self) -> str:
@@ -63,6 +65,10 @@ class TileSolverOrchestrator:
         self._mask_cache: Dict[
             Tuple[int, int, int, int, Tuple[Tuple[str, int], ...]],
             Tuple[Tuple[Tuple[bool, ...], ...], ...],
+        ] = {}
+        self._mask_reasons: Dict[
+            Tuple[int, int, int, int, Tuple[Tuple[str, int], ...]],
+            Optional[str],
         ] = {}
 
     def solve(
@@ -131,7 +137,7 @@ class TileSolverOrchestrator:
                 )
             )
             total_attempts = len(phase_candidates)
-            for attempt_index, (board_w, board_h, mask, mask_index) in enumerate(
+            for attempt_index, (board_w, board_h, mask, mask_index, note) in enumerate(
                 phase_candidates, start=1
             ):
                 phase_limit = phase.time_limit_sec
@@ -249,6 +255,7 @@ class TileSolverOrchestrator:
                     success=solve_result is not None,
                     variant_kind=variant_kind,
                     variant_index=mask_index,
+                    notes=note,
                 )
                 attempts.append(attempt)
                 phase_elapsed = time.time() - phase_start
@@ -418,7 +425,15 @@ class TileSolverOrchestrator:
         allow_discards: bool,
         *,
         allow_overage_without_popouts: bool = False,
-    ) -> Iterable[Tuple[int, int, Optional[Tuple[Tuple[bool, ...], ...]], Optional[int]]]:
+    ) -> Iterable[
+        Tuple[
+            int,
+            int,
+            Optional[Tuple[Tuple[bool, ...], ...]],
+            Optional[int],
+            Optional[str],
+        ]
+    ]:
         yielded_initial_boards: Set[Tuple[int, int]] = set()
         for candidate in candidates:
             board_area = candidate.width * candidate.height
@@ -441,11 +456,14 @@ class TileSolverOrchestrator:
             if board_key in yielded_initial_boards:
                 continue
             yielded_initial_boards.add(board_key)
-            yield candidate.width, candidate.height, None, None
+            note = None
+            if not candidate.pop_out_masks and candidate.mask_reason:
+                note = candidate.mask_reason
+            yield candidate.width, candidate.height, None, None, note
             if not allow_pop_outs:
                 continue
             for index, mask in enumerate(candidate.pop_out_masks, start=1):
-                yield candidate.width, candidate.height, mask, index
+                yield candidate.width, candidate.height, mask, index, None
 
     def _candidate_boards(
         self,
@@ -478,14 +496,22 @@ class TileSolverOrchestrator:
         seen_rectangles: Set[Tuple[int, int]] = set()
 
         def add_candidate(width_cells: int, height_cells: int) -> None:
-            pop_out_masks = self._generate_pop_out_masks(
+            pop_out_masks, mask_reason = self._generate_pop_out_masks(
                 width_cells,
                 height_cells,
                 target_cells,
                 max_pop_out_depth,
                 tile_quantities,
             )
-            boards.append(BoardCandidate(width_cells, height_cells, target_cells, pop_out_masks))
+            boards.append(
+                BoardCandidate(
+                    width_cells,
+                    height_cells,
+                    target_cells,
+                    pop_out_masks,
+                    mask_reason,
+                )
+            )
 
         for reduction in range(6):
             side_cells = starting_side_cells - reduction * cells_per_foot
@@ -516,17 +542,30 @@ class TileSolverOrchestrator:
         target_cells: int,
         max_depth: int,
         tile_quantities: Dict[TileType, int],
-    ) -> Tuple[Tuple[Tuple[bool, ...], ...], ...]:
+    ) -> Tuple[Tuple[Tuple[bool, ...], ...], Optional[str]]:
         signature = self._mask_tile_signature(tile_quantities)
         cache_key = (width, height, target_cells, max_depth, signature)
         cached = self._mask_cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached, self._mask_reasons.get(cache_key)
 
         slack = self._resolve_slack_for_mask(width, height, target_cells, max_depth)
         if slack <= 0 or max_depth <= 0:
+            if slack == 0:
+                reason = (
+                    "No masks generated: board area matches tile coverage so there is no slack "
+                    "for pop-outs."
+                )
+            elif slack < 0:
+                reason = (
+                    "No masks generated: tile coverage exceeds the board area and pop-outs "
+                    "cannot add space."
+                )
+            else:
+                reason = "No masks generated: pop-outs disabled by MAX_POP_OUT_DEPTH."
             self._mask_cache[cache_key] = ()
-            return ()
+            self._mask_reasons[cache_key] = reason
+            return (), reason
 
         min_span = self._minimum_mask_span(width, height)
         horizontal_limit = self._max_edge_for_dimension(width)
@@ -564,10 +603,15 @@ class TileSolverOrchestrator:
             ):
                 result = (mask_tuple,)
                 self._mask_cache[cache_key] = result
-                return result
+                self._mask_reasons[cache_key] = None
+                return result, None
 
+        reason = (
+            "No masks generated: all {attempts} random candidates failed validation."
+        ).format(attempts=attempts)
         self._mask_cache[cache_key] = ()
-        return ()
+        self._mask_reasons[cache_key] = reason
+        return (), reason
 
     def _mask_tile_signature(self, tile_quantities: Dict[TileType, int]) -> Tuple[Tuple[str, int], ...]:
         pairs = [
