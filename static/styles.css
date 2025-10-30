@@ -45,6 +45,97 @@ form {
     position: relative;
 }
 
+.form-status {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: -1rem;
+    margin-bottom: 1.5rem;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgba(11, 14, 17, 0.35);
+    border: 1px solid rgba(78, 205, 196, 0.25);
+    color: rgba(245, 247, 250, 0.8);
+    transition: background 0.2s ease, border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    min-width: 0;
+}
+
+.status-indicator .status-icon {
+    position: relative;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 0.35rem;
+    border: 2px solid rgba(78, 205, 196, 0.3);
+    box-shadow: inset 0 0 0 2px rgba(11, 14, 17, 0.65);
+    background: rgba(78, 205, 196, 0.12);
+    transition: background 0.2s ease, border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-indicator .status-icon::after {
+    content: "";
+    position: absolute;
+    inset: 0.15rem 0.35rem 0.3rem 0.45rem;
+    border-right: 2px solid transparent;
+    border-bottom: 2px solid transparent;
+    transform: rotate(45deg) scale(0.6);
+    transform-origin: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.status-indicator .status-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.status-indicator .status-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(245, 247, 250, 0.7);
+}
+
+.status-indicator .status-description {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(245, 247, 250, 0.85);
+    white-space: nowrap;
+}
+
+.status-indicator.active {
+    background: rgba(78, 205, 196, 0.18);
+    border-color: rgba(101, 226, 217, 0.9);
+    box-shadow: 0 0 20px rgba(101, 226, 217, 0.25);
+    transform: translateY(-1px);
+}
+
+.status-indicator.active .status-icon {
+    background: linear-gradient(135deg, var(--accent), #65e2d9);
+    border-color: rgba(11, 14, 17, 0.75);
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.65);
+}
+
+.status-indicator.active .status-icon::after {
+    border-right-color: var(--bg);
+    border-bottom-color: var(--bg);
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+}
+
+.status-indicator:not(.active) .status-description {
+    color: rgba(245, 247, 250, 0.6);
+}
+
 .tiles-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

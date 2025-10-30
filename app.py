@@ -324,6 +324,7 @@ def index():
         "tile_selection_form.html",
         tile_options=SETTINGS.TILE_OPTIONS,
         max_quantity=10,
+        grid_unit=SETTINGS.GRID_UNIT_FT,
     )
 
 

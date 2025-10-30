@@ -89,11 +89,20 @@
             <p class="subtitle">Select tile sizes and quantities to generate an optimum layout.</p>
         </header>
         <form action="{{ url_for('solve_tiles') }}" method="post" id="tile-form">
+            <div class="form-status" aria-hidden="false">
+                <div class="status-indicator" id="perfect-square-indicator" role="status" aria-live="polite">
+                    <span class="status-icon" aria-hidden="true"></span>
+                    <div class="status-copy">
+                        <span class="status-title">Perfect Square</span>
+                        <span class="status-description" id="perfect-square-description">Select tiles to build a square.</span>
+                    </div>
+                </div>
+            </div>
             <div class="tiles-grid">
                 {% for name, dims in tile_options.items() %}
                 <div class="tile-card">
                     <label for="{{ name }}">{{ name.replace('x', ' ft × ') }} ft tile</label>
-                    <select name="{{ name }}" id="{{ name }}">
+                    <select name="{{ name }}" id="{{ name }}" data-width-ft="{{ '%.3f'|format(dims[0]) }}" data-height-ft="{{ '%.3f'|format(dims[1]) }}">
                         {% for i in range(0, max_quantity + 1) %}
                         <option value="{{ i }}">{{ i }}</option>
                         {% endfor %}
@@ -108,6 +117,60 @@
     </main>
     <script>
         const form = document.getElementById('tile-form');
+        const gridUnitFt = {{ grid_unit | tojson }};
+        const unitAreaFt2 = gridUnitFt * gridUnitFt;
+        const tileSelects = Array.from(document.querySelectorAll('.tile-card select'));
+        const perfectSquareIndicator = document.getElementById('perfect-square-indicator');
+        const perfectSquareDescription = document.getElementById('perfect-square-description');
+
+        function updatePerfectSquareIndicator() {
+            let totalArea = 0;
+            tileSelects.forEach((select) => {
+                const quantity = Number(select.value);
+                if (!Number.isFinite(quantity) || quantity <= 0) {
+                    return;
+                }
+                const width = Number(select.dataset.widthFt);
+                const height = Number(select.dataset.heightFt);
+                if (!Number.isFinite(width) || !Number.isFinite(height)) {
+                    return;
+                }
+                totalArea += quantity * width * height;
+            });
+
+            let description = 'Select tiles to build a square.';
+            let isPerfectSquare = false;
+
+            if (totalArea > 0 && Number.isFinite(unitAreaFt2) && unitAreaFt2 > 0) {
+                const cellsExact = totalArea / unitAreaFt2;
+                const cellsRounded = Math.round(cellsExact);
+                const alignedToGrid = Math.abs(cellsExact - cellsRounded) < 1e-6;
+                if (!alignedToGrid) {
+                    description = `${totalArea.toFixed(2)} ft² (needs grid alignment)`;
+                } else {
+                    const root = Math.round(Math.sqrt(cellsRounded));
+                    if (root * root === cellsRounded) {
+                        const sideFt = root * gridUnitFt;
+                        description = `${sideFt.toFixed(1)} ft × ${sideFt.toFixed(1)} ft ready`;
+                        isPerfectSquare = true;
+                    } else {
+                        description = `${totalArea.toFixed(2)} ft² (not a perfect square)`;
+                    }
+                }
+            }
+
+            if (perfectSquareIndicator) {
+                perfectSquareIndicator.classList.toggle('active', isPerfectSquare);
+                perfectSquareIndicator.setAttribute('data-status', isPerfectSquare ? 'ready' : 'inactive');
+            }
+            if (perfectSquareDescription) {
+                perfectSquareDescription.textContent = description;
+            }
+        }
+
+        updatePerfectSquareIndicator();
+        form.addEventListener('change', updatePerfectSquareIndicator);
+
         const overlay = document.getElementById('run-overlay');
         const statusText = document.getElementById('stat-status');
         const phaseText = document.getElementById('stat-phase');
