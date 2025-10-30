@@ -1,21 +1,17 @@
 TILE SOLVER RUN LOG
-Generated at: 2025-10-29T11:52:52-04:00
+Generated at: 2025-10-30T17:51:42-04:00
 MAX_EDGE_FT=6.0
 PLUS_TOGGLE=True
 SAME_SHAPE_LIMIT=1
 Tile counts:
-  - 1x1: 5 (1.0ft × 1.0ft)
-  - 1x1.5: 5 (1.0ft × 1.5ft)
-  - 1x2: 5 (1.0ft × 2.0ft)
-  - 1.5x1.5: 5 (1.5ft × 1.5ft)
-  - 1.5x2: 4 (1.5ft × 2.0ft)
-  - 1.5x2.5: 4 (1.5ft × 2.5ft)
-  - 1.5x3: 4 (1.5ft × 3.0ft)
-  - 2x2: 3 (2.0ft × 2.0ft)
-  - 2x2.5: 2 (2.0ft × 2.5ft)
-  - 2x3: 2 (2.0ft × 3.0ft)
-  Total tiles: 39
-  Total coverage: 112.75 ft²
+  - 1x1: 3 (1.0ft × 1.0ft)
+  - 1x1.5: 2 (1.0ft × 1.5ft)
+  - 1x2: 3 (1.0ft × 2.0ft)
+  - 1.5x1.5: 4 (1.5ft × 1.5ft)
+  - 2x2: 10 (2.0ft × 2.0ft)
+  - 2x3: 10 (2.0ft × 3.0ft)
+  Total tiles: 32
+  Total coverage: 121.00 ft²
 
 Events:
 Run started.
@@ -23,37 +19,37 @@ Run started.
   Phase 2: Phase D (time limit: 1800.00s, rotation: yes, discards: yes, pop-outs: yes)
   Total allotted time: 3000.00s
 Phase 1 (Phase C) started. Time limit: 1200.00s.
-Attempt 1 started on board 11.00ft x 11.00ft (Initial).
-Attempt 1 (Initial) completed in 1200.03s (success: no, backtracks: 2538511).
-Phase Phase C completed in 1200.03s (success: no).
+Attempt 1 started on board 11.00ft x 11.00ft (Square Fit).
+Attempt 1 (Square Fit) completed in 1200.00s (success: no, backtracks: 2132037).
+Phase Phase C completed in 1200.01s (success: no).
 Phase 2 (Phase D) started. Time limit: 1800.00s.
-Attempt 1 started on board 11.00ft x 11.00ft (Initial).
-Attempt 1 (Initial) completed in 360.03s (success: no, backtracks: 754948).
-Attempt 2 started on board 10.00ft x 10.00ft (Initial).
-Attempt 2 (Initial) completed in 288.01s (success: no, backtracks: 685061).
-Attempt 3 started on board 9.00ft x 9.00ft (Initial).
-Attempt 3 (Initial) completed in 288.02s (success: no, backtracks: 731905).
-Attempt 4 started on board 8.00ft x 8.00ft (Initial).
-Attempt 4 (Initial) completed in 288.01s (success: no, backtracks: 812940).
-Attempt 5 started on board 7.00ft x 7.00ft (Initial).
-Attempt 5 (Initial) completed in 288.01s (success: no, backtracks: 901414).
-Attempt 6 started on board 6.00ft x 6.00ft (Initial).
-Attempt 6 (Initial) completed in 287.91s (success: no, backtracks: 1084342).
-Phase Phase D completed in 1800.00s (success: no).
-Run completed in 3002.50s (success: no).
+Attempt 1 started on board 11.00ft x 11.00ft (Square Fit).
+Attempt 1 (Square Fit) completed in 360.01s (success: no, backtracks: 696253).
+Attempt 2 started on board 10.00ft x 10.00ft (Square Fit).
+Attempt 2 (Square Fit) completed in 288.01s (success: no, backtracks: 584543).
+Attempt 3 started on board 9.00ft x 9.00ft (Square Fit).
+Attempt 3 (Square Fit) completed in 108.56s (success: no, backtracks: 296412).
+Attempt 4 started on board 8.00ft x 8.00ft (Square Fit).
+Attempt 4 (Square Fit) completed in 32.78s (success: no, backtracks: 92304).
+Attempt 5 started on board 7.00ft x 7.00ft (Square Fit).
+Attempt 5 (Square Fit) completed in 8.34s (success: no, backtracks: 28346).
+Attempt 6 started on board 6.00ft x 6.00ft (Square Fit).
+Attempt 6 (Square Fit) completed in 1.98s (success: no, backtracks: 8790).
+Phase Phase D completed in 799.69s (success: no).
+Run completed in 1999.70s (success: no).
 
 Summary:
 Phase C
-  Total elapsed: 1200.03s
-  Board 11.00ft x 11.00ft (Initial) | elapsed=1200.03s | backtracks=2538511 | success=no
+  Total elapsed: 1200.01s
+  Board 11.00ft x 11.00ft (Square Fit) | elapsed=1200.00s | backtracks=2132037 | success=no
 
 Phase D
-  Total elapsed: 1800.00s
-  Board 11.00ft x 11.00ft (Initial) | elapsed=360.03s | backtracks=754948 | success=no
-  Board 10.00ft x 10.00ft (Initial) | elapsed=288.01s | backtracks=685061 | success=no
-  Board 9.00ft x 9.00ft (Initial) | elapsed=288.02s | backtracks=731905 | success=no
-  Board 8.00ft x 8.00ft (Initial) | elapsed=288.01s | backtracks=812940 | success=no
-  Board 7.00ft x 7.00ft (Initial) | elapsed=288.01s | backtracks=901414 | success=no
-  Board 6.00ft x 6.00ft (Initial) | elapsed=287.91s | backtracks=1084342 | success=no
+  Total elapsed: 799.69s
+  Board 11.00ft x 11.00ft (Square Fit) | elapsed=360.01s | backtracks=696253 | success=no
+  Board 10.00ft x 10.00ft (Square Fit) | elapsed=288.01s | backtracks=584543 | success=no
+  Board 9.00ft x 9.00ft (Square Fit) | elapsed=108.56s | backtracks=296412 | success=no
+  Board 8.00ft x 8.00ft (Square Fit) | elapsed=32.78s | backtracks=92304 | success=no
+  Board 7.00ft x 7.00ft (Square Fit) | elapsed=8.34s | backtracks=28346 | success=no
+  Board 6.00ft x 6.00ft (Square Fit) | elapsed=1.98s | backtracks=8790 | success=no
 
 Run completed without a solution.
