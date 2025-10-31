@@ -25,6 +25,7 @@ from flask import (
 from config import SETTINGS
 from solver.models import SolveResult
 from solver.orchestrator import PhaseLog, TileSolverOrchestrator
+from solver.predictor import estimate_solve_probability
 
 app = Flask(__name__)
 app.secret_key = "tile-solver-secret"
@@ -416,7 +417,19 @@ def index():
         max_quantity=10,
         grid_unit=SETTINGS.GRID_UNIT_FT,
         tile_bags=load_tile_bags(),
+        predictor_defaults=_predictor_defaults(),
     )
+
+
+@app.route("/predict", methods=["POST"])
+def predict_probability():
+    payload = request.get_json(silent=True) or {}
+    tiles_payload = payload.get("tiles") if isinstance(payload.get("tiles"), dict) else {}
+    config_overrides = payload.get("config") if isinstance(payload.get("config"), dict) else {}
+
+    selection = _parse_selection(tiles_payload)
+    prediction = estimate_solve_probability(selection, config_overrides)
+    return jsonify(prediction.to_dict())
 
 
 @app.route("/solve", methods=["POST"])
@@ -584,6 +597,39 @@ def _format_seconds(seconds: Optional[float]) -> str:
 @app.context_processor
 def inject_helpers():
     return {"format_seconds": _format_seconds}
+
+
+def _predictor_defaults() -> Dict[str, object]:
+    return {
+        "max_edge_ratio": SETTINGS.MAX_EDGE_RATIO,
+        "plus_toggle": SETTINGS.PLUS_TOGGLE,
+        "same_shape_limit": SETTINGS.SAME_SHAPE_LIMIT,
+        "max_pop_out_depth": SETTINGS.MAX_POP_OUT_DEPTH,
+        "mask_validation_time_limit": SETTINGS.MASK_VALIDATION_TIME_LIMIT,
+        "max_rectangle_aspect_ratio": SETTINGS.MAX_RECTANGLE_ASPECT_RATIO,
+        "grid_unit_ft": SETTINGS.GRID_UNIT_FT,
+        "max_edge_ft": SETTINGS.MAX_EDGE_FT,
+        "max_edge_inside_only": SETTINGS.MAX_EDGE_INSIDE_ONLY,
+        "mask_generation_attempts": SETTINGS.MASK_GENERATION_ATTEMPTS,
+        "mask_validation_attempts": SETTINGS.MASK_VALIDATION_ATTEMPTS,
+        "allow_rectangles": SETTINGS.ALLOW_RECTANGLES,
+        "phases": [
+            {
+                "name": phase.name,
+                "allow_rotation": phase.allow_rotation,
+                "allow_discards": phase.allow_discards,
+                "allow_pop_outs": phase.allow_pop_outs,
+                "time_limit_sec": phase.time_limit_sec,
+                "first_board_time_share": phase.first_board_time_share,
+            }
+            for phase in (
+                SETTINGS.PHASE_A,
+                SETTINGS.PHASE_B,
+                SETTINGS.PHASE_C,
+                SETTINGS.PHASE_D,
+            )
+        ],
+    }
 
 
 def _write_outputs(
