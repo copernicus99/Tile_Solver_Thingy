@@ -89,10 +89,8 @@
             <p class="subtitle">Select tile sizes and quantities to generate an optimum layout.</p>
         </header>
         <form action="{{ url_for('solve_tiles') }}" method="post" id="tile-form">
-            <div class="form-toolbar">
-                <button type="button" id="open-tilebags" class="secondary-button">Tile Bags</button>
-            </div>
             <div class="form-status" aria-hidden="false">
+                <button type="button" id="open-tilebags" class="status-pill-button">Tile Bags</button>
                 <div class="status-indicator" id="perfect-square-indicator" role="status" aria-live="polite">
                     <span class="status-icon" aria-hidden="true"></span>
                     <div class="status-copy">
