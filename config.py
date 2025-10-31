@@ -60,6 +60,7 @@ class Settings:
     MASK_VALIDATION_TIME_LIMIT = 3.0
 
     ALLOW_RECTANGLES = False
+    MAX_RECTANGLE_ASPECT_RATIO = 4.0 / 3.0
 
     PHASE_A = PhaseConfig(
         "Phase A",
