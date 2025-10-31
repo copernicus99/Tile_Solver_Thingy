@@ -67,9 +67,12 @@ class CandidateBoardTests(unittest.TestCase):
                 self.tile_quantities,
             )
         rectangle_dims = {(c.width, c.height) for c in candidates if c.width != c.height}
-        self.assertIn((60, 8), rectangle_dims)
-        self.assertIn((40, 12), rectangle_dims)
+        self.assertIn((24, 20), rectangle_dims)
         self.assertTrue(all(width >= height for width, height in rectangle_dims))
+        max_ratio = getattr(SETTINGS, "MAX_RECTANGLE_ASPECT_RATIO", None)
+        if max_ratio:
+            for width, height in rectangle_dims:
+                self.assertLessEqual(width / height, max_ratio)
 
 
 class PhaseBoardAttemptTests(unittest.TestCase):

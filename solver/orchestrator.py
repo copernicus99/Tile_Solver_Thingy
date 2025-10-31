@@ -560,17 +560,31 @@ class TileSolverOrchestrator:
             add_candidate(side_cells, side_cells)
 
         if getattr(SETTINGS, "ALLOW_RECTANGLES", False):
+            max_ratio = getattr(SETTINGS, "MAX_RECTANGLE_ASPECT_RATIO", None)
+            if max_ratio is not None and max_ratio <= 1:
+                max_ratio = None
             max_height = int(math.sqrt(target_cells))
+            rectangle_dims: List[Tuple[int, int]] = []
             for height_cells in range(min_side, max_height + 1):
                 if target_cells % height_cells != 0:
                     continue
                 width_cells = target_cells // height_cells
                 if width_cells < min_side or width_cells == height_cells:
                     continue
+                width_cells, height_cells = max(width_cells, height_cells), min(
+                    width_cells, height_cells
+                )
+                aspect_ratio = width_cells / height_cells
+                if max_ratio is not None and aspect_ratio > max_ratio:
+                    continue
                 key = (width_cells, height_cells)
                 if key in seen_rectangles:
                     continue
                 seen_rectangles.add(key)
+                rectangle_dims.append(key)
+
+            rectangle_dims.sort(key=lambda dims: (abs(dims[0] - dims[1]), dims[0] * dims[1]))
+            for width_cells, height_cells in rectangle_dims:
                 add_candidate(width_cells, height_cells)
 
         return boards
