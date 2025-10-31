@@ -143,6 +143,28 @@ class RunLogWriter:
                 lines.append("  Mask layout (# = available, . = removed):")
                 for row in mask_rows:
                     lines.append(f"    {row}")
+        elif event_type == "mask_validation":
+            board = event.get("board_size_ft") or (None, None)
+            status = str(event.get("status") or "unknown").lower()
+            mask_count = event.get("mask_count")
+            count_value = mask_count if isinstance(mask_count, int) and mask_count > 0 else 0
+            reason = event.get("reason")
+            prefix = "Mask validation=Passed" if status == "passed" else "Mask validation=Failed"
+            mask_text = (
+                "no masks"
+                if count_value == 0
+                else f"{count_value} mask" + ("s" if count_value != 1 else "")
+            )
+            lines.append(
+                "{prefix} for board {w:.2f}ft x {h:.2f}ft ({mask_text}).".format(
+                    prefix=prefix,
+                    w=(board[0] or 0.0),
+                    h=(board[1] or 0.0),
+                    mask_text=mask_text,
+                )
+            )
+            if status != "passed" and reason:
+                lines.append(f"  Reason: {reason}")
         elif event_type == "attempt_completed":
             idx = event.get("attempt_index")
             elapsed = event.get("elapsed")
