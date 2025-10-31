@@ -48,7 +48,9 @@ class PhaseAttempt:
             if self.variant_index is not None:
                 return f"Mask {self.variant_index}"
             return "Mask"
-        return "Rectangle Fit"
+        width_cells, height_cells = self.board_size_cells
+        base_label = "Square Fit" if width_cells == height_cells else "Rectangle Fit"
+        return base_label
 
 
 @dataclass
@@ -189,11 +191,13 @@ class TileSolverOrchestrator:
                     remaining_time = None
                     attempt_limit = None
                 variant_kind = "mask" if mask is not None else "initial"
+                board_is_square = board_w == board_h
                 if variant_kind == "initial":
+                    base_label = "Square Fit" if board_is_square else "Rectangle Fit"
                     variant_label = (
-                        "Rectangle Fit w Discards"
+                        f"{base_label} w Discards"
                         if phase.allow_discards
-                        else "Rectangle Fit"
+                        else base_label
                     )
                 else:
                     variant_label = (

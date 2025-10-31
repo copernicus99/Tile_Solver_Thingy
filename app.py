@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import queue
 import threading
 import time
@@ -133,6 +134,19 @@ class RunLogWriter:
         lines.append(f"  Total coverage: {total_area:.2f} ft²")
         return lines
 
+    @staticmethod
+    def _infer_variant_label(event: Dict[str, object]) -> str:
+        board_size_cells = event.get("board_size_cells")
+        if (
+            isinstance(board_size_cells, (list, tuple))
+            and len(board_size_cells) == 2
+        ):
+            width, height = board_size_cells
+            if isinstance(width, (int, float)) and isinstance(height, (int, float)):
+                if math.isclose(float(width), float(height)):
+                    return "Square Fit"
+        return "Rectangle Fit"
+
     def handle_event(self, event: Dict[str, object]) -> None:
         event_type = event.get("type")
         lines: List[str] = []
@@ -167,7 +181,7 @@ class RunLogWriter:
         elif event_type == "attempt_started":
             idx = event.get("attempt_index")
             board = event.get("board_size_ft") or (None, None)
-            variant_label = event.get("variant_label") or "Rectangle Fit"
+            variant_label = event.get("variant_label") or self._infer_variant_label(event)
             lines.append(
                 "Attempt {idx} started on board {w:.2f}ft x {h:.2f}ft ({variant}).".format(
                     idx=idx,
@@ -209,7 +223,7 @@ class RunLogWriter:
             elapsed_text = f"{elapsed:.2f}s" if isinstance(elapsed, (int, float)) else "unknown"
             success = "yes" if event.get("success") else "no"
             backtracks = event.get("backtracks")
-            variant_label = event.get("variant_label") or "Rectangle Fit"
+            variant_label = event.get("variant_label") or self._infer_variant_label(event)
             lines.append(
                 "Attempt {idx} ({variant}) completed in {elapsed} (success: {success}, backtracks: {backtracks}).".format(
                     idx=idx,
