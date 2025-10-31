@@ -84,6 +84,9 @@
         </div>
     </div>
     <main>
+        <div class="form-toolbar">
+            <button type="button" id="open-tilebags" class="secondary-button">Tile Bags</button>
+        </div>
         <header>
             <h1>Tile Layout Solver</h1>
             <p class="subtitle">Select tile sizes and quantities to generate an optimum layout.</p>
@@ -115,11 +118,45 @@
             </div>
         </form>
     </main>
+    <div class="tilebag-modal" id="tilebag-modal" hidden>
+        <div class="tilebag-modal__backdrop" data-tilebag-close></div>
+        <div class="tilebag-modal__panel" role="dialog" aria-modal="true" aria-labelledby="tilebag-modal-title">
+            <div class="tilebag-modal__header">
+                <h2 id="tilebag-modal-title">Choose a tile bag</h2>
+                <button type="button" class="icon-button" data-tilebag-close aria-label="Close tile bag picker">×</button>
+            </div>
+            <div class="tilebag-modal__body">
+                {% if tile_bags %}
+                <ul class="tilebag-list">
+                    {% for bag in tile_bags %}
+                    <li class="tilebag-list__item">
+                        <button type="button" class="tilebag-option" data-tilebag="{{ bag.name }}">{{ bag.name }}</button>
+                        {% if bag.tiles %}
+                        <dl class="tilebag-contents">
+                            {% for tile_name, quantity in bag.tiles.items() %}
+                            <div>
+                                <dt>{{ tile_name.replace('x', ' ft × ') }} ft</dt>
+                                <dd>{{ quantity }}</dd>
+                            </div>
+                            {% endfor %}
+                        </dl>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="tilebag-empty">No tile bags defined. Edit <code>tile_bags.json</code> to add some.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
     <script>
         const form = document.getElementById('tile-form');
         const gridUnitFt = {{ grid_unit | tojson }};
         const unitAreaFt2 = gridUnitFt * gridUnitFt;
         const tileSelects = Array.from(document.querySelectorAll('.tile-card select'));
+        const maxQuantity = {{ max_quantity | tojson }};
+        const tileBags = {{ tile_bags | tojson }};
         const perfectSquareIndicator = document.getElementById('perfect-square-indicator');
         const perfectSquareDescription = document.getElementById('perfect-square-description');
 
@@ -170,6 +207,67 @@
 
         updatePerfectSquareIndicator();
         form.addEventListener('change', updatePerfectSquareIndicator);
+
+        function openTileBagModal() {
+            if (!tileBagModal) {
+                return;
+            }
+            tileBagModal.removeAttribute('hidden');
+            tileBagModal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeTileBagModal() {
+            if (!tileBagModal) {
+                return;
+            }
+            tileBagModal.setAttribute('aria-hidden', 'true');
+            tileBagModal.setAttribute('hidden', '');
+        }
+
+        function applyTileBag(bagName) {
+            const bag = tileBags.find((entry) => entry && entry.name === bagName);
+            if (!bag) {
+                return;
+            }
+            const tiles = bag.tiles || {};
+            tileSelects.forEach((select) => {
+                const quantity = Number(tiles[select.id] ?? 0);
+                const clamped = Math.min(Math.max(quantity, 0), maxQuantity);
+                select.value = String(clamped);
+            });
+            updatePerfectSquareIndicator();
+            closeTileBagModal();
+        }
+
+        const tileBagButton = document.getElementById('open-tilebags');
+        const tileBagModal = document.getElementById('tilebag-modal');
+        const tileBagCloseButtons = tileBagModal ? tileBagModal.querySelectorAll('[data-tilebag-close]') : [];
+        const tileBagOptions = tileBagModal ? tileBagModal.querySelectorAll('[data-tilebag]') : [];
+
+        if (tileBagButton) {
+            tileBagButton.addEventListener('click', openTileBagModal);
+        }
+
+        tileBagCloseButtons.forEach((button) => {
+            button.addEventListener('click', closeTileBagModal);
+        });
+
+        tileBagOptions.forEach((button) => {
+            button.addEventListener('click', () => {
+                const bagName = button.getAttribute('data-tilebag');
+                if (bagName) {
+                    applyTileBag(bagName);
+                }
+            });
+        });
+
+        if (tileBagModal) {
+            tileBagModal.addEventListener('click', (event) => {
+                if (event.target === tileBagModal) {
+                    closeTileBagModal();
+                }
+            });
+        }
 
         const overlay = document.getElementById('run-overlay');
         const statusText = document.getElementById('stat-status');
