@@ -313,6 +313,19 @@
             }
         }
 
+        function resolveStatusLabel(label) {
+            if (typeof label !== 'string') {
+                return null;
+            }
+            const trimmed = label.trim();
+            return trimmed.length > 0 ? trimmed : null;
+        }
+
+        function setStatusFromVariant(event, fallback = 'Exploring layouts…') {
+            const variantLabel = event ? resolveStatusLabel(event.variant_label) : null;
+            statusText.textContent = variantLabel || fallback;
+        }
+
         function formatSeconds(seconds) {
             if (!seconds || seconds < 0) {
                 return '0s';
@@ -433,6 +446,7 @@
                         attemptElapsed: data.attempt_elapsed,
                         backtracks: data.backtracks,
                     });
+                    setStatusFromVariant(data);
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
                     updateProgress(phaseProgressBar, phaseProgressLabel, (data.phase_progress || 0) * 100);
                     if (data.overall_progress != null) {
@@ -458,10 +472,14 @@
                     if (data.overall_progress != null) {
                         updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
                     }
-                    statusText.textContent = data.success ? 'Layout found!' : 'Exploring layouts…';
+                    if (data.success) {
+                        statusText.textContent = 'Layout found!';
+                    } else {
+                        setStatusFromVariant(data);
+                    }
                     break;
                 case 'attempt_progress':
-                    statusText.textContent = 'Exploring layouts…';
+                    setStatusFromVariant(data);
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabel = formatBoardSize(data.board_size_ft);
                         updateGridDisplay(boardLabel, data.variant_label);
