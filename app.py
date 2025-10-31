@@ -29,6 +29,7 @@ app = Flask(__name__)
 app.secret_key = "tile-solver-secret"
 
 orchestrator = TileSolverOrchestrator()
+TILE_BAG_FILE = Path("tile_bags.json")
 
 PHASE_CONFIGS = {
     phase.name: phase
@@ -39,6 +40,43 @@ PHASE_CONFIGS = {
         SETTINGS.PHASE_D,
     )
 }
+
+
+def load_tile_bags() -> List[Dict[str, object]]:
+    if not TILE_BAG_FILE.exists():
+        return []
+    try:
+        raw_content = TILE_BAG_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    try:
+        parsed = json.loads(raw_content)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    bags: List[Dict[str, object]] = []
+    for entry in parsed:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        tiles = entry.get("tiles", {})
+        if not isinstance(name, str) or not name.strip():
+            continue
+        sanitized_tiles: Dict[str, int] = {}
+        if isinstance(tiles, dict):
+            for tile_name, quantity in tiles.items():
+                if not isinstance(tile_name, str):
+                    continue
+                try:
+                    sanitized_tiles[tile_name] = int(quantity)
+                except (TypeError, ValueError):
+                    continue
+        bags.append({"name": name.strip(), "tiles": sanitized_tiles})
+    return bags
+
 
 class RunLogWriter:
     def __init__(self, path: Path, selection: Optional[Dict[str, int]] = None):
@@ -363,6 +401,7 @@ def index():
         tile_options=SETTINGS.TILE_OPTIONS,
         max_quantity=10,
         grid_unit=SETTINGS.GRID_UNIT_FT,
+        tile_bags=load_tile_bags(),
     )
 
 
