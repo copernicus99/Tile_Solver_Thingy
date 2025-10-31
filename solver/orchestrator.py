@@ -48,7 +48,7 @@ class PhaseAttempt:
             if self.variant_index is not None:
                 return f"Mask {self.variant_index}"
             return "Mask"
-        return "Square Fit"
+        return "Rectangle Fit"
 
 
 @dataclass
@@ -191,9 +191,9 @@ class TileSolverOrchestrator:
                 variant_kind = "mask" if mask is not None else "initial"
                 if variant_kind == "initial":
                     variant_label = (
-                        "Square Fit w Discard"
+                        "Rectangle Fit w Discards"
                         if phase.allow_discards
-                        else "Square Fit"
+                        else "Rectangle Fit"
                     )
                 else:
                     variant_label = (
