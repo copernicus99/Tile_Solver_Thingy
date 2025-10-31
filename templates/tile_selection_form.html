@@ -719,8 +719,79 @@
         const overlaySubtitle = document.getElementById('overlay-subtitle');
         const overlayTitle = document.getElementById('overlay-title');
 
+        let audioContext = null;
+
+        function getAudioContext() {
+            if (typeof window === 'undefined') {
+                return null;
+            }
+            const Ctor = window.AudioContext || window.webkitAudioContext;
+            if (!Ctor) {
+                return null;
+            }
+            if (!audioContext) {
+                audioContext = new Ctor();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(() => {
+                    /* ignored */
+                });
+            }
+            return audioContext;
+        }
+
+        function scheduleTones(steps) {
+            const ctx = getAudioContext();
+            if (!ctx || !Array.isArray(steps) || !steps.length) {
+                return;
+            }
+            const base = ctx.currentTime + 0.05;
+            steps.forEach((step) => {
+                if (!step || typeof step.frequency !== 'number') {
+                    return;
+                }
+                const start = base + Math.max(0, step.offset || 0);
+                const duration = Math.max(0.06, step.duration || 0.2);
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                oscillator.type = step.type || 'sine';
+                oscillator.frequency.setValueAtTime(step.frequency, start);
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                const volume = Math.max(0.001, step.volume || 0.25);
+                const attack = Math.min(0.05, duration * 0.4);
+                const release = Math.min(0.1, duration * 0.5);
+                const sustainEnd = Math.max(start + attack, start + duration - release);
+                gainNode.gain.setValueAtTime(0.0001, start);
+                gainNode.gain.exponentialRampToValueAtTime(volume, start + attack);
+                gainNode.gain.setValueAtTime(volume, sustainEnd);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+                oscillator.start(start);
+                oscillator.stop(start + duration + 0.05);
+                if (typeof step.endFrequency === 'number' && step.endFrequency > 0) {
+                    oscillator.frequency.exponentialRampToValueAtTime(step.endFrequency, start + duration);
+                }
+            });
+        }
+
+        function playSuccessSound() {
+            scheduleTones([
+                { frequency: 660, duration: 0.22, volume: 0.22 },
+                { frequency: 880, offset: 0.16, duration: 0.28, volume: 0.18 },
+                { frequency: 990, offset: 0.32, duration: 0.24, volume: 0.16 },
+            ]);
+        }
+
+        function playFailureSound() {
+            scheduleTones([
+                { frequency: 200, duration: 0.32, volume: 0.28, endFrequency: 90, type: 'sine' },
+                { frequency: 160, offset: 0.08, duration: 0.26, volume: 0.18, endFrequency: 70, type: 'triangle' },
+            ]);
+        }
+
         let currentEventSource = null;
         let currentRunId = null;
+        let completionSoundPlayed = false;
         function resetOverlay() {
             statusText.textContent = 'Initializing…';
             phaseText.textContent = '—';
@@ -736,6 +807,7 @@
             overlay.classList.remove('error');
             overlay.setAttribute('aria-hidden', 'false');
             overlay.classList.add('active');
+            completionSoundPlayed = false;
         }
 
         function updateProgress(bar, label, value) {
@@ -950,23 +1022,47 @@
                         updateProgress(overallProgressBar, overallProgressLabel, (data.overall_progress || 0) * 100);
                     }
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
+                    if (!completionSoundPlayed) {
+                        if (data.success) {
+                            playSuccessSound();
+                        } else {
+                            playFailureSound();
+                        }
+                        completionSoundPlayed = true;
+                    }
                     break;
                 case 'error':
                     statusText.textContent = 'Unable to start solver';
                     overlaySubtitle.textContent = data.message || 'An unexpected error occurred.';
                     updateProgress(overallProgressBar, overallProgressLabel, 0);
                     updateProgress(phaseProgressBar, phaseProgressLabel, 0);
+                    if (!completionSoundPlayed) {
+                        playFailureSound();
+                        completionSoundPlayed = true;
+                    }
                     break;
                 case 'finished':
                     closeEventSource();
                     if (data.success) {
+                        if (!completionSoundPlayed) {
+                            playSuccessSound();
+                            completionSoundPlayed = true;
+                        }
                         window.location.href = `/runs/${data.run_id}/result`;
                     } else if (data.error) {
                         overlay.classList.add('error');
                         overlayTitle.textContent = 'Solver error';
                         overlaySubtitle.textContent = data.error;
                         overlay.setAttribute('aria-hidden', 'false');
+                        if (!completionSoundPlayed) {
+                            playFailureSound();
+                            completionSoundPlayed = true;
+                        }
                     } else {
+                        if (!completionSoundPlayed) {
+                            playFailureSound();
+                            completionSoundPlayed = true;
+                        }
                         window.location.href = `/runs/${data.run_id}/result`;
                     }
                     break;
