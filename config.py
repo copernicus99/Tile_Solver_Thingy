@@ -48,18 +48,17 @@ class Settings:
     MAX_EDGE_INSIDE_ONLY = False
 
     PLUS_TOGGLE = True
+
     # A limit of ``0`` disables the adjacency restriction so that phases can
-    # freely use duplicate tile shapes when the inventory requires it. The
-    # previous default of ``1`` prevented even two identical tiles from
-    # touching, which made square boards like the 11 ft × 11 ft attempt in the
-    # sample log impossible to complete.
-    SAME_SHAPE_LIMIT = 0
+    # freely use duplicate tile shapes when the inventory requires it.
+    SAME_SHAPE_LIMIT = 1
     MAX_POP_OUT_DEPTH = 2
+
     MASK_GENERATION_ATTEMPTS = 10
     MASK_VALIDATION_ATTEMPTS = 2
-    MASK_VALIDATION_TIME_LIMIT = 3.0
+    MASK_VALIDATION_TIME_LIMIT = 60.0
 
-    ALLOW_RECTANGLES = False
+    ALLOW_RECTANGLES = True
     MAX_RECTANGLE_ASPECT_RATIO = 4.0 / 3.0
 
     PHASE_A = PhaseConfig(
