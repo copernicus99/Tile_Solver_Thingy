@@ -1,21 +1,21 @@
 TILE SOLVER RUN LOG
-Generated at: 2025-10-30T19:20:30-04:00
+Generated at: 2025-10-30T20:23:22-04:00
 MAX_EDGE_FT=6.0
 PLUS_TOGGLE=True
 SAME_SHAPE_LIMIT=1
 Tile counts:
-  - 1x1: 6 (1.0ft × 1.0ft)
+  - 1x1: 8 (1.0ft × 1.0ft)
   - 1x1.5: 7 (1.0ft × 1.5ft)
-  - 1x2: 5 (1.0ft × 2.0ft)
-  - 1.5x1.5: 5 (1.5ft × 1.5ft)
-  - 1.5x2: 4 (1.5ft × 2.0ft)
-  - 1.5x2.5: 3 (1.5ft × 2.5ft)
-  - 1.5x3: 4 (1.5ft × 3.0ft)
-  - 2x2: 5 (2.0ft × 2.0ft)
+  - 1x2: 6 (1.0ft × 2.0ft)
+  - 1.5x1.5: 8 (1.5ft × 1.5ft)
+  - 1.5x2: 5 (1.5ft × 2.0ft)
+  - 1.5x2.5: 5 (1.5ft × 2.5ft)
+  - 1.5x3: 5 (1.5ft × 3.0ft)
+  - 2x2: 4 (2.0ft × 2.0ft)
   - 2x2.5: 2 (2.0ft × 2.5ft)
   - 2x3: 1 (2.0ft × 3.0ft)
-  Total tiles: 42
-  Total coverage: 115.00 ft²
+  Total tiles: 51
+  Total coverage: 136.75 ft²
 
 Events:
 Run started.
@@ -25,18 +25,18 @@ Run started.
 Phase 1 (Phase C) started. Time limit: 1200.00s.
 Phase Phase C completed in 0.00s (success: no).
 Phase 2 (Phase D) started. Time limit: 1800.00s.
-Attempt 1 started on board 11.00ft x 11.00ft (Square Fit w Discard).
-Attempt 1 (Square Fit w Discard) completed in 360.05s (success: no, backtracks: 385451).
-Attempt 2 started on board 10.00ft x 10.00ft (Square Fit w Discard).
-Attempt 2 (Square Fit w Discard) completed in 571.98s (success: no, backtracks: 305623).
-Attempt 3 started on board 9.00ft x 9.00ft (Square Fit w Discard).
-Attempt 3 (Square Fit w Discard) completed in 288.03s (success: no, backtracks: 273979).
-Attempt 4 started on board 8.00ft x 8.00ft (Square Fit w Discard).
-Attempt 4 (Square Fit w Discard) completed in 335.49s (success: no, backtracks: 279456).
-Attempt 5 started on board 7.00ft x 7.00ft (Square Fit w Discard).
-Attempt 5 (Square Fit w Discard) completed in 918.42s (success: no, backtracks: 301452).
-Phase Phase D completed in 2473.98s (success: no).
-Run completed in 2479.81s (success: no).
+Attempt 1 started on board 12.00ft x 12.00ft (Square Fit w Discard).
+Attempt 1 (Square Fit w Discard) completed in 360.11s (success: no, backtracks: 141080).
+Attempt 2 started on board 11.00ft x 11.00ft (Square Fit w Discard).
+Attempt 2 (Square Fit w Discard) completed in 535.61s (success: no, backtracks: 124094).
+Attempt 3 started on board 10.00ft x 10.00ft (Square Fit w Discard).
+Attempt 3 (Square Fit w Discard) completed in 288.08s (success: no, backtracks: 214208).
+Attempt 4 started on board 9.00ft x 9.00ft (Square Fit w Discard).
+Attempt 4 (Square Fit w Discard) completed in 424.87s (success: no, backtracks: 149157).
+Attempt 5 started on board 8.00ft x 8.00ft (Square Fit w Discard).
+Attempt 5 (Square Fit w Discard) completed in 191.34s (success: no, backtracks: 186828).
+Phase Phase D completed in 1800.06s (success: no).
+Run completed in 1808.08s (success: no).
 
 Summary:
 Phase C
@@ -44,16 +44,16 @@ Phase C
   No board attempts
 
 Phase D
-  Total elapsed: 2473.98s
-  Board 11.00ft x 11.00ft (Square Fit w Discard) | elapsed=360.05s | backtracks=385451 | success=no
+  Total elapsed: 1800.06s
+  Board 12.00ft x 12.00ft (Square Fit w Discard) | elapsed=360.11s | backtracks=141080 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 10.00ft x 10.00ft (Square Fit w Discard) | elapsed=571.98s | backtracks=305623 | success=no
+  Board 11.00ft x 11.00ft (Square Fit w Discard) | elapsed=535.61s | backtracks=124094 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 9.00ft x 9.00ft (Square Fit w Discard) | elapsed=288.03s | backtracks=273979 | success=no
+  Board 10.00ft x 10.00ft (Square Fit w Discard) | elapsed=288.08s | backtracks=214208 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 8.00ft x 8.00ft (Square Fit w Discard) | elapsed=335.49s | backtracks=279456 | success=no
+  Board 9.00ft x 9.00ft (Square Fit w Discard) | elapsed=424.87s | backtracks=149157 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 7.00ft x 7.00ft (Square Fit w Discard) | elapsed=918.42s | backtracks=301452 | success=no
+  Board 8.00ft x 8.00ft (Square Fit w Discard) | elapsed=191.34s | backtracks=186828 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
 
 Run completed without a solution.
