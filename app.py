@@ -138,6 +138,11 @@ class RunLogWriter:
                     variant=variant_label,
                 )
             )
+            mask_rows = event.get("mask_rows")
+            if mask_rows:
+                lines.append("  Mask layout (# = available, . = removed):")
+                for row in mask_rows:
+                    lines.append(f"    {row}")
         elif event_type == "attempt_completed":
             idx = event.get("attempt_index")
             elapsed = event.get("elapsed")
@@ -154,6 +159,11 @@ class RunLogWriter:
                     backtracks=backtracks if backtracks is not None else "unknown",
                 )
             )
+            mask_rows = event.get("mask_rows")
+            if mask_rows:
+                lines.append("  Mask layout (# = available, . = removed):")
+                for row in mask_rows:
+                    lines.append(f"    {row}")
         elif event_type == "phase_completed":
             phase = event.get("phase")
             elapsed = event.get("total_elapsed")
@@ -204,6 +214,10 @@ class RunLogWriter:
                 )
                 if attempt.notes:
                     lines.append(f"    Note: {attempt.notes}")
+                if attempt.mask_rows:
+                    lines.append("    Mask layout (# = available, . = removed):")
+                    for row in attempt.mask_rows:
+                        lines.append(f"      {row}")
             if phase_log.result:
                 lines.append("  Result achieved")
                 if phase_log.result.discarded_tiles:

@@ -38,6 +38,7 @@ class PhaseAttempt:
     variant_index: Optional[int] = None
     notes: Optional[str] = None
     variant_label_text: Optional[str] = None
+    mask_rows: Optional[Tuple[str, ...]] = None
 
     @property
     def variant_label(self) -> str:
@@ -115,6 +116,11 @@ class TileSolverOrchestrator:
         candidate_boards = list(
             self._candidate_boards(total_area_ft, max_pop_out_depth, tile_quantities)
         )
+        tileset_is_square = False
+        if candidate_boards:
+            target_cells = candidate_boards[0].target_cells
+            root = math.isqrt(target_cells)
+            tileset_is_square = root * root == target_cells
         for phase_index, phase in enumerate(phases):
             phase_start = time.time()
             attempts: List[PhaseAttempt] = []
@@ -143,6 +149,14 @@ class TileSolverOrchestrator:
             for attempt_index, (board_w, board_h, mask, mask_index, note) in enumerate(
                 phase_candidates, start=1
             ):
+                expose_mask = (
+                    phase.name in {SETTINGS.PHASE_B.name, SETTINGS.PHASE_D.name}
+                    and not tileset_is_square
+                    and mask is not None
+                )
+                mask_rows: Optional[Tuple[str, ...]] = None
+                if expose_mask and mask is not None:
+                    mask_rows = self._mask_to_rows(mask)
                 phase_limit = phase.time_limit_sec
                 if phase_limit is not None:
                     elapsed_before_attempt = time.time() - phase_start
@@ -250,6 +264,7 @@ class TileSolverOrchestrator:
                     variant_kind=variant_kind,
                     variant_index=mask_index,
                     variant_label=variant_label,
+                    mask_rows=list(mask_rows) if mask_rows else None,
                 )
                 solve_start = time.time()
                 solve_result = solver.solve()
@@ -265,6 +280,7 @@ class TileSolverOrchestrator:
                     variant_index=mask_index,
                     notes=note,
                     variant_label_text=variant_label,
+                    mask_rows=mask_rows,
                 )
                 attempts.append(attempt)
                 phase_elapsed = time.time() - phase_start
@@ -310,6 +326,7 @@ class TileSolverOrchestrator:
                     variant_kind=variant_kind,
                     variant_index=mask_index,
                     variant_label=variant_label,
+                    mask_rows=list(mask_rows) if mask_rows else None,
                 )
                 if solve_result:
                     result = solve_result
@@ -667,6 +684,14 @@ class TileSolverOrchestrator:
             "Mask Validation",
         )
         return solver.solve() is not None
+
+    def _mask_to_rows(
+        self, mask: Tuple[Tuple[bool, ...], ...]
+    ) -> Tuple[str, ...]:
+        return tuple(
+            "".join("#" if cell else "." for cell in row)
+            for row in mask
+        )
 
     def _render_mask_from_notches(
         self, width: int, height: int, notches: Sequence[Tuple[str, int, int, int]]
