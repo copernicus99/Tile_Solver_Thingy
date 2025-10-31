@@ -116,6 +116,20 @@ class TileSolverOrchestrator:
         candidate_boards = list(
             self._candidate_boards(total_area_ft, max_pop_out_depth, tile_quantities)
         )
+        for candidate in candidate_boards:
+            mask_count = len(candidate.pop_out_masks)
+            status = "passed" if mask_count else "failed"
+            emit(
+                "mask_validation",
+                board_size_ft=(
+                    candidate.width * self.unit_ft,
+                    candidate.height * self.unit_ft,
+                ),
+                board_size_cells=(candidate.width, candidate.height),
+                status=status,
+                mask_count=mask_count,
+                reason=candidate.mask_reason,
+            )
         tileset_is_square = False
         if candidate_boards:
             target_cells = candidate_boards[0].target_cells
