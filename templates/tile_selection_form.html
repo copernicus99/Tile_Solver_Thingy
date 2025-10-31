@@ -84,14 +84,14 @@
         </div>
     </div>
     <main>
-        <div class="form-toolbar">
-            <button type="button" id="open-tilebags" class="secondary-button">Tile Bags</button>
-        </div>
         <header>
             <h1>Tile Layout Solver</h1>
             <p class="subtitle">Select tile sizes and quantities to generate an optimum layout.</p>
         </header>
         <form action="{{ url_for('solve_tiles') }}" method="post" id="tile-form">
+            <div class="form-toolbar">
+                <button type="button" id="open-tilebags" class="secondary-button">Tile Bags</button>
+            </div>
             <div class="form-status" aria-hidden="false">
                 <div class="status-indicator" id="perfect-square-indicator" role="status" aria-live="polite">
                     <span class="status-icon" aria-hidden="true"></span>
