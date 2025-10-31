@@ -91,6 +91,7 @@
         <form action="{{ url_for('solve_tiles') }}" method="post" id="tile-form">
             <div class="form-status" aria-hidden="false">
                 <button type="button" id="open-tilebags" class="status-pill-button">Tile Bags</button>
+                <button type="button" id="open-predictor" class="status-pill-button status-pill-button--accent">Predict Solve %</button>
                 <div class="status-indicator" id="perfect-square-indicator" role="status" aria-live="polite">
                     <span class="status-icon" aria-hidden="true"></span>
                     <div class="status-copy">
@@ -148,6 +149,68 @@
             </div>
         </div>
     </div>
+    <div class="predictor-modal" id="predictor-modal" hidden>
+        <div class="predictor-modal__backdrop" data-predictor-close></div>
+        <div class="predictor-modal__panel" role="dialog" aria-modal="true" aria-labelledby="predictor-modal-title">
+            <div class="predictor-modal__header">
+                <h2 id="predictor-modal-title">Solve Probability Predictor</h2>
+                <button type="button" class="icon-button" data-predictor-close aria-label="Close predictor panel">×</button>
+            </div>
+            <div class="predictor-modal__body">
+                <div class="predictor-summary">
+                    <div class="predictor-score" id="predictor-score" aria-live="polite">--%</div>
+                    <div class="predictor-tolerance" id="predictor-tolerance">±--%</div>
+                    <div class="predictor-confidence" id="predictor-confidence">Confidence: —</div>
+                    <p class="predictor-note" id="predictor-summary">Select tiles and adjust solver switches to see the estimated probability of a successful solve. The prediction reports an estimated percentage with a ± tolerance band.</p>
+                </div>
+                <section class="predictor-inputs" aria-label="Prediction controls">
+                    <div class="predictor-input">
+                        <label for="predictor-max-edge-ratio">Max edge ratio</label>
+                        <div class="predictor-input-control">
+                            <input type="range" min="0.3" max="0.9" step="0.05" id="predictor-max-edge-ratio" data-config-key="max_edge_ratio">
+                            <span class="predictor-input-value" data-output-for="predictor-max-edge-ratio">0.60</span>
+                        </div>
+                    </div>
+                    <div class="predictor-input">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="predictor-plus-toggle" data-config-key="plus_toggle">
+                            Allow plus adjacency
+                        </label>
+                    </div>
+                    <div class="predictor-input">
+                        <label for="predictor-same-shape-limit">Same side shape limit</label>
+                        <input type="number" min="0" max="6" step="1" id="predictor-same-shape-limit" data-config-key="same_shape_limit">
+                    </div>
+                    <div class="predictor-input">
+                        <label for="predictor-pop-out-depth">Max pop out depth</label>
+                        <input type="number" min="0" max="6" step="1" id="predictor-pop-out-depth" data-config-key="max_pop_out_depth">
+                    </div>
+                    <div class="predictor-input">
+                        <label for="predictor-mask-time">Mask validation time limit (sec)</label>
+                        <input type="number" min="15" max="600" step="15" id="predictor-mask-time" data-config-key="mask_validation_time_limit">
+                    </div>
+                    <div class="predictor-input">
+                        <label for="predictor-rectangle-aspect">Max rectangle aspect ratio</label>
+                        <input type="number" min="1" max="2.5" step="0.1" id="predictor-rectangle-aspect" data-config-key="max_rectangle_aspect_ratio">
+                    </div>
+                </section>
+                <div class="predictor-actions">
+                    <button type="button" class="secondary-button" id="predictor-reset">Reset to defaults</button>
+                    <button type="button" class="secondary-button predictor-refresh" id="predictor-refresh">Recalculate</button>
+                </div>
+                <section class="predictor-factors" aria-live="polite" aria-label="Prediction breakdown">
+                    <h3>What is influencing the result?</h3>
+                    <ul id="predictor-factors-list"></ul>
+                </section>
+                <section class="predictor-config" aria-label="Effective configuration snapshot">
+                    <h3>Effective configuration used</h3>
+                    <dl id="predictor-config-list"></dl>
+                </section>
+                <p class="predictor-footnote">The predictor considers all solver configuration values, including those not directly exposed above. Adjusting tiles or the switches will re-run the estimate.</p>
+                <div class="predictor-status" id="predictor-status" role="status" aria-live="polite"></div>
+            </div>
+        </div>
+    </div>
     <script>
         const form = document.getElementById('tile-form');
         const gridUnitFt = {{ grid_unit | tojson }};
@@ -155,6 +218,7 @@
         const tileSelects = Array.from(document.querySelectorAll('.tile-card select'));
         const maxQuantity = {{ max_quantity | tojson }};
         const tileBags = {{ tile_bags | tojson }};
+        const predictorDefaults = {{ predictor_defaults | tojson }};
         const perfectSquareIndicator = document.getElementById('perfect-square-indicator');
         const perfectSquareDescription = document.getElementById('perfect-square-description');
 
@@ -264,6 +328,379 @@
                 if (event.target === tileBagModal) {
                     closeTileBagModal();
                 }
+            });
+        }
+
+        const predictorModal = document.getElementById('predictor-modal');
+        const predictorOpenButton = document.getElementById('open-predictor');
+        const predictorCloseButtons = predictorModal ? predictorModal.querySelectorAll('[data-predictor-close]') : [];
+        const predictorInputs = predictorModal ? predictorModal.querySelectorAll('[data-config-key]') : [];
+        const predictorScore = document.getElementById('predictor-score');
+        const predictorTolerance = document.getElementById('predictor-tolerance');
+        const predictorConfidence = document.getElementById('predictor-confidence');
+        const predictorSummary = document.getElementById('predictor-summary');
+        const predictorFactorsList = document.getElementById('predictor-factors-list');
+        const predictorConfigList = document.getElementById('predictor-config-list');
+        const predictorStatus = document.getElementById('predictor-status');
+        const predictorResetButton = document.getElementById('predictor-reset');
+        const predictorRefreshButton = document.getElementById('predictor-refresh');
+        const predictorEndpoint = '{{ url_for('predict_probability') }}';
+
+        let predictorInitialized = false;
+        let predictorRefreshTimeout = null;
+        let predictorController = null;
+
+        function isPredictorOpen() {
+            return Boolean(predictorModal) && !predictorModal.hasAttribute('hidden');
+        }
+
+        function setPredictorStatus(message, variant = 'idle') {
+            if (!predictorStatus) {
+                return;
+            }
+            predictorStatus.textContent = message;
+            predictorStatus.setAttribute('data-status', variant);
+        }
+
+        function openPredictor() {
+            if (!predictorModal) {
+                return;
+            }
+            predictorModal.removeAttribute('hidden');
+            predictorModal.setAttribute('aria-hidden', 'false');
+            if (!predictorInitialized) {
+                applyPredictorDefaults();
+                predictorInitialized = true;
+            }
+            requestAnimationFrame(() => {
+                runPredictor();
+            });
+        }
+
+        function closePredictor() {
+            if (!predictorModal) {
+                return;
+            }
+            predictorModal.setAttribute('hidden', '');
+            predictorModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function applyPredictorDefaults() {
+            if (!predictorDefaults) {
+                return;
+            }
+            const mapping = {
+                max_edge_ratio: 'predictor-max-edge-ratio',
+                plus_toggle: 'predictor-plus-toggle',
+                same_shape_limit: 'predictor-same-shape-limit',
+                max_pop_out_depth: 'predictor-pop-out-depth',
+                mask_validation_time_limit: 'predictor-mask-time',
+                max_rectangle_aspect_ratio: 'predictor-rectangle-aspect',
+            };
+            Object.entries(mapping).forEach(([key, elementId]) => {
+                const element = document.getElementById(elementId);
+                if (!element) {
+                    return;
+                }
+                const value = predictorDefaults[key];
+                if (element.type === 'checkbox') {
+                    element.checked = Boolean(value);
+                } else if (typeof value === 'number') {
+                    element.value = String(value);
+                }
+                updatePredictorInputOutput(element);
+            });
+        }
+
+        function updatePredictorInputOutput(element) {
+            if (!element) {
+                return;
+            }
+            const outputSelector = element.getAttribute('data-output-id');
+            let output = null;
+            if (outputSelector) {
+                output = document.getElementById(outputSelector);
+            }
+            if (!output) {
+                output = predictorModal ? predictorModal.querySelector(`[data-output-for="${element.id}"]`) : null;
+            }
+            if (!output) {
+                return;
+            }
+            if (element.type === 'range') {
+                const numeric = Number(element.value);
+                output.textContent = Number.isFinite(numeric) ? numeric.toFixed(2) : element.value;
+            } else {
+                output.textContent = element.value;
+            }
+        }
+
+        function gatherTileSelection() {
+            const selection = {};
+            tileSelects.forEach((select) => {
+                selection[select.id] = Number(select.value) || 0;
+            });
+            return selection;
+        }
+
+        function gatherPredictorOverrides() {
+            const overrides = {};
+            predictorInputs.forEach((input) => {
+                const key = input.getAttribute('data-config-key');
+                if (!key) {
+                    return;
+                }
+                if (input.type === 'checkbox') {
+                    overrides[key] = input.checked;
+                } else {
+                    const value = Number(input.value);
+                    overrides[key] = Number.isFinite(value) ? value : input.value;
+                }
+            });
+            return overrides;
+        }
+
+        function formatKeyLabel(key) {
+            return key
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (char) => char.toUpperCase());
+        }
+
+        function formatValue(value) {
+            if (typeof value === 'boolean') {
+                return value ? 'Enabled' : 'Disabled';
+            }
+            if (typeof value === 'number') {
+                const rounded = Math.round(value * 100) / 100;
+                return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+            }
+            return String(value);
+        }
+
+        function formatSecondsDisplay(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric) || numeric <= 0) {
+                return 'No limit';
+            }
+            if (numeric < 60) {
+                return `${Math.round(numeric)}s`;
+            }
+            const minutes = Math.floor(numeric / 60);
+            const seconds = Math.round(numeric % 60);
+            if (seconds) {
+                return `${minutes}m ${seconds}s`;
+            }
+            return `${minutes}m`;
+        }
+
+        function renderPredictorConfig(config) {
+            if (!predictorConfigList) {
+                return;
+            }
+            predictorConfigList.innerHTML = '';
+            if (!config || typeof config !== 'object') {
+                return;
+            }
+            const entries = Object.entries(config).filter(([key]) => key !== 'phases');
+            entries.sort(([a], [b]) => a.localeCompare(b));
+            entries.forEach(([key, value]) => {
+                const dt = document.createElement('dt');
+                dt.textContent = formatKeyLabel(key);
+                const dd = document.createElement('dd');
+                dd.textContent = formatValue(value);
+                predictorConfigList.append(dt, dd);
+            });
+            const phases = Array.isArray(config.phases) ? config.phases : [];
+            if (phases.length) {
+                const dt = document.createElement('dt');
+                dt.textContent = 'Phases';
+                const dd = document.createElement('dd');
+                const list = document.createElement('ul');
+                list.className = 'predictor-phase-list';
+                phases.forEach((phase) => {
+                    const item = document.createElement('li');
+                    const rotation = _truthy(phase.allow_rotation) ? 'rotation' : 'no rotation';
+                    const discards = _truthy(phase.allow_discards) ? 'discards' : 'no discards';
+                    const popOuts = _truthy(phase.allow_pop_outs) ? 'pop-outs' : 'no pop-outs';
+                    const timeText = formatSecondsDisplay(phase.time_limit_sec);
+                    item.textContent = `${phase.name}: ${timeText}, ${rotation}, ${discards}, ${popOuts}`;
+                    list.appendChild(item);
+                });
+                dd.appendChild(list);
+                predictorConfigList.append(dt, dd);
+            }
+        }
+
+        function renderPredictorFactors(factors) {
+            if (!predictorFactorsList) {
+                return;
+            }
+            predictorFactorsList.innerHTML = '';
+            if (!Array.isArray(factors) || !factors.length) {
+                const empty = document.createElement('li');
+                empty.className = 'predictor-factor-empty';
+                empty.textContent = 'No contributing factors available yet.';
+                predictorFactorsList.appendChild(empty);
+                return;
+            }
+            factors
+                .slice()
+                .sort((a, b) => Math.abs((b && b.contribution) || 0) - Math.abs((a && a.contribution) || 0))
+                .slice(0, 6)
+                .forEach((factor) => {
+                    if (!factor) {
+                        return;
+                    }
+                    const li = document.createElement('li');
+                    li.className = 'predictor-factor-item';
+                    const header = document.createElement('div');
+                    header.className = 'predictor-factor-header';
+                    const label = document.createElement('span');
+                    label.className = 'predictor-factor-label';
+                    label.textContent = factor.label || 'Factor';
+                    const value = document.createElement('span');
+                    value.className = 'predictor-factor-value';
+                    const contribution = Number(factor.contribution);
+                    value.textContent = Number.isFinite(contribution)
+                        ? `${contribution >= 0 ? '+' : ''}${contribution.toFixed(1)} pts`
+                        : '—';
+                    header.append(label, value);
+                    const description = document.createElement('p');
+                    description.className = 'predictor-factor-description';
+                    description.textContent = factor.description || '';
+                    li.append(header, description);
+                    predictorFactorsList.appendChild(li);
+                });
+        }
+
+        function renderPredictorResult(result) {
+            if (!result) {
+                return;
+            }
+            if (predictorScore) {
+                const probability = Number(result.probability);
+                predictorScore.textContent = Number.isFinite(probability)
+                    ? `${probability.toFixed(1)}%`
+                    : '--%';
+            }
+            if (predictorTolerance) {
+                const tolerance = Number(result.tolerance);
+                predictorTolerance.textContent = Number.isFinite(tolerance)
+                    ? `±${tolerance.toFixed(1)}%`
+                    : '±--%';
+            }
+            if (predictorConfidence) {
+                predictorConfidence.textContent = `Confidence: ${result.confidence || '—'}`;
+            }
+            if (predictorSummary) {
+                predictorSummary.textContent = result.summary || '';
+            }
+            renderPredictorFactors(result.factors);
+            renderPredictorConfig(result.effective_config);
+        }
+
+        function schedulePredictorRun() {
+            if (!isPredictorOpen()) {
+                return;
+            }
+            if (predictorRefreshTimeout) {
+                clearTimeout(predictorRefreshTimeout);
+            }
+            predictorRefreshTimeout = setTimeout(() => {
+                runPredictor();
+            }, 200);
+        }
+
+        async function runPredictor() {
+            if (!isPredictorOpen()) {
+                return;
+            }
+            if (predictorController) {
+                predictorController.abort();
+            }
+            predictorController = new AbortController();
+            setPredictorStatus('Calculating…', 'loading');
+            try {
+                const response = await fetch(predictorEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tiles: gatherTileSelection(),
+                        config: gatherPredictorOverrides(),
+                    }),
+                    signal: predictorController.signal,
+                });
+                if (!response.ok) {
+                    throw new Error('Unable to calculate prediction.');
+                }
+                const payload = await response.json();
+                renderPredictorResult(payload);
+                setPredictorStatus('', 'idle');
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+                console.error('Predictor error', error);
+                setPredictorStatus(error.message || 'Prediction failed.', 'error');
+            }
+        }
+
+        function _truthy(value) {
+            if (typeof value === 'boolean') {
+                return value;
+            }
+            if (typeof value === 'string') {
+                return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+            }
+            if (typeof value === 'number') {
+                return value !== 0;
+            }
+            return false;
+        }
+
+        if (predictorOpenButton) {
+            predictorOpenButton.addEventListener('click', openPredictor);
+        }
+
+        predictorCloseButtons.forEach((button) => {
+            button.addEventListener('click', closePredictor);
+        });
+
+        if (predictorModal) {
+            predictorModal.addEventListener('click', (event) => {
+                if (event.target === predictorModal) {
+                    closePredictor();
+                }
+            });
+        }
+
+        predictorInputs.forEach((input) => {
+            input.addEventListener('input', () => {
+                updatePredictorInputOutput(input);
+                schedulePredictorRun();
+            });
+            input.addEventListener('change', () => {
+                updatePredictorInputOutput(input);
+                schedulePredictorRun();
+            });
+        });
+
+        tileSelects.forEach((select) => {
+            select.addEventListener('change', schedulePredictorRun);
+        });
+
+        if (predictorResetButton) {
+            predictorResetButton.addEventListener('click', () => {
+                applyPredictorDefaults();
+                schedulePredictorRun();
+            });
+        }
+
+        if (predictorRefreshButton) {
+            predictorRefreshButton.addEventListener('click', () => {
+                runPredictor();
             });
         }
 
