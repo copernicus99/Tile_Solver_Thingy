@@ -818,8 +818,8 @@
             elapsedText.textContent = '0s';
             updateProgress(overallProgressBar, overallProgressLabel, 0);
             updateProgress(phaseProgressBar, phaseProgressLabel, 0);
-            overlaySubtitle.textContent = 'Preparing phases and estimating time requirements.';
-            overlayTitle.textContent = 'Running tile solver...';
+            overlaySubtitle.textContent = 'Processing........';
+            overlayTitle.textContent = 'Solver Run Dashbaord';
             overlay.classList.remove('error');
             overlay.setAttribute('aria-hidden', 'false');
             overlay.classList.add('active');
@@ -940,7 +940,7 @@
             if (!data) return;
             switch (data.type) {
                 case 'run_started':
-                    overlaySubtitle.textContent = 'Preparing phases and estimating time requirements.';
+                    overlaySubtitle.textContent = 'Processing........';
                     totalQuotaText.textContent = formatSeconds(data.total_allotment);
                     statusText.textContent = 'Solving…';
                     break;
