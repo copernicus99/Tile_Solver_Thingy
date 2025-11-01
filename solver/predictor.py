@@ -193,10 +193,10 @@ def _score_config(config: Mapping[str, object], factors: List[PredictionFactor])
     plus_toggle = 1.0 if _truthy(config.get("plus_toggle")) else 0.0
     add_factor(
         "plus_toggle",
-        "Plus adjacency",
+        "Plus intersections",
         plus_toggle,
         4.5,
-        "Allowing plus-shaped adjacencies removes a major restriction.",
+        "Allowing plus-shaped intersections removes a major restriction.",
     )
 
     same_shape = _normalize(config.get("same_shape_limit"), 0.0, 4.0)
