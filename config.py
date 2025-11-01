@@ -47,6 +47,7 @@ class Settings:
     # perimeter.
     MAX_EDGE_INSIDE_ONLY = False
 
+    # True means solver will enforce the “no plus intersections”
     PLUS_TOGGLE = True
 
     # A limit of ``0`` disables the adjacency restriction so that phases can
@@ -58,7 +59,7 @@ class Settings:
     MASK_VALIDATION_ATTEMPTS = 2
     MASK_VALIDATION_TIME_LIMIT = 60.0
 
-    ALLOW_RECTANGLES = False
+    ALLOW_RECTANGLES = True
     MAX_RECTANGLE_ASPECT_RATIO = 4.0 / 3.0
 
     PHASE_A = PhaseConfig(
