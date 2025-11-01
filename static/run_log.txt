@@ -1,5 +1,5 @@
 TILE SOLVER RUN LOG
-Generated at: 2025-11-01T08:34:17-04:00
+Generated at: 2025-11-01T11:33:29-04:00
 MAX_EDGE_FT=6.0
 PLUS_TOGGLE=True
 SAME_SHAPE_LIMIT=1
@@ -22,10 +22,11 @@ Run started.
   Phase 1: Phase C (time limit: 1200.00s, rotation: yes, discards: no, pop-outs: no)
   Phase 2: Phase D (time limit: 1800.00s, rotation: yes, discards: yes, pop-outs: yes)
   Total allotted time: 3000.00s
+
 Mask validation=Failed for board 12.00ft x 12.00ft (no masks).
   Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 13.00ft x 11.00ft (no masks).
-  Reason: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
+Mask validation=Failed for board 11.00ft x 11.00ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
 Mask validation=Failed for board 10.00ft x 10.00ft (no masks).
   Reason: No masks generated: all 10 random candidates failed validation.
 Mask validation=Failed for board 9.00ft x 9.00ft (no masks).
@@ -34,46 +35,42 @@ Mask validation=Failed for board 8.00ft x 8.00ft (no masks).
   Reason: No masks generated: all 10 random candidates failed validation.
 Mask validation=Failed for board 7.00ft x 7.00ft (no masks).
   Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 13.00ft x 11.00ft (no masks).
+
+  Reason: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
 Phase 1 (Phase C) started. Time limit: 1200.00s.
 Attempt 1 started on board 13.00ft x 11.00ft (Rectangle Fit).
-Attempt 1 (Rectangle Fit) completed in 1438.13s (success: no, backtracks: 460366).
-Phase Phase C completed in 1438.13s (success: no).
+Attempt 1 (Rectangle Fit) completed in 1200.09s (success: no, backtracks: 910913).
+Phase Phase C completed in 1200.09s (success: no).
+
 Phase 2 (Phase D) started. Time limit: 1800.00s.
 Attempt 1 started on board 12.00ft x 12.00ft (Square Fit w Discards).
-Attempt 1 (Square Fit w Discards) completed in 360.10s (success: no, backtracks: 212317).
+Attempt 1 (Square Fit w Discards) completed in 360.09s (success: no, backtracks: 250155).
 Attempt 2 started on board 13.00ft x 11.00ft (Rectangle Fit w Discards).
-Attempt 2 (Rectangle Fit w Discards) completed in 288.10s (success: no, backtracks: 172399).
-Attempt 3 started on board 10.00ft x 10.00ft (Square Fit w Discards).
-Attempt 3 (Square Fit w Discards) completed in 288.07s (success: no, backtracks: 218708).
-Attempt 4 started on board 9.00ft x 9.00ft (Square Fit w Discards).
-Attempt 4 (Square Fit w Discards) completed in 288.06s (success: no, backtracks: 240100).
-Attempt 5 started on board 8.00ft x 8.00ft (Square Fit w Discards).
-Attempt 5 (Square Fit w Discards) completed in 288.03s (success: no, backtracks: 266008).
-Attempt 6 started on board 7.00ft x 7.00ft (Square Fit w Discards).
-Attempt 6 (Square Fit w Discards) completed in 287.63s (success: no, backtracks: 906743).
-Phase Phase D completed in 1800.01s (success: no).
-Run completed in 3238.39s (success: no).
+Attempt 2 (Rectangle Fit w Discards) completed in 240.09s (success: no, backtracks: 156869).
+Attempt 3 started on board 11.00ft x 11.00ft (Square Fit w Discards).
+Attempt 3 (Square Fit w Discards) completed in 266.04s (success: no, backtracks: 84638).
+Attempt 4 started on board 10.00ft x 10.00ft (Square Fit w Discards).
+Attempt 4 (Square Fit w Discards) completed in 7190.15s (success: no, backtracks: 81164).
+Phase Phase D completed in 8056.39s (success: no).
+Run completed in 9256.94s (success: no).
 
 Summary:
 Phase C
-  Total elapsed: 1438.13s
-  Board 13.00ft x 11.00ft (Rectangle Fit) | elapsed=1438.13s | backtracks=460366 | success=no
+  Total elapsed: 1200.09s
+  Board 13.00ft x 11.00ft (Rectangle Fit) | elapsed=1200.09s | backtracks=910913 | success=no
     Note: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
 
 Phase D
-  Total elapsed: 1800.01s
-  Board 12.00ft x 12.00ft (Square Fit w Discards) | elapsed=360.10s | backtracks=212317 | success=no
+  Total elapsed: 8056.39s
+  Board 12.00ft x 12.00ft (Square Fit w Discards) | elapsed=360.09s | backtracks=250155 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 13.00ft x 11.00ft (Rectangle Fit w Discards) | elapsed=288.10s | backtracks=172399 | success=no
+  Board 13.00ft x 11.00ft (Rectangle Fit w Discards) | elapsed=240.09s | backtracks=156869 | success=no
     Note: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
-  Board 10.00ft x 10.00ft (Square Fit w Discards) | elapsed=288.07s | backtracks=218708 | success=no
+  Board 11.00ft x 11.00ft (Square Fit w Discards) | elapsed=266.04s | backtracks=84638 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
-  Board 9.00ft x 9.00ft (Square Fit w Discards) | elapsed=288.06s | backtracks=240100 | success=no
-    Note: No masks generated: all 10 random candidates failed validation.
-  Board 8.00ft x 8.00ft (Square Fit w Discards) | elapsed=288.03s | backtracks=266008 | success=no
-    Note: No masks generated: all 10 random candidates failed validation.
-  Board 7.00ft x 7.00ft (Square Fit w Discards) | elapsed=287.63s | backtracks=906743 | success=no
+  Board 10.00ft x 10.00ft (Square Fit w Discards) | elapsed=7190.15s | backtracks=81164 | success=no
     Note: No masks generated: all 10 random candidates failed validation.
 
-Total backtracks performed: 2,476,641
+Total backtracks performed: 1,483,739
 Run completed without a solution.
