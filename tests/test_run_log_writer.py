@@ -56,3 +56,32 @@ def test_header_includes_timestamp_and_selection(log_path: Path) -> None:
     assert "- 1x1: 2 (1.0ft × 1.0ft)" in content
     assert "- 1x2: 1 (1.0ft × 2.0ft)" in content
     assert "Total tiles: 3" in content
+
+
+def test_summary_includes_total_backtracks(log_path: Path) -> None:
+    writer = RunLogWriter(log_path)
+    attempt_one = PhaseAttempt(
+        phase_name="Phase One",
+        board_size_ft=(1.0, 1.0),
+        board_size_cells=(1, 1),
+        elapsed=1.0,
+        backtracks=1234,
+        success=False,
+    )
+    attempt_two = PhaseAttempt(
+        phase_name="Phase Two",
+        board_size_ft=(2.0, 2.0),
+        board_size_cells=(2, 2),
+        elapsed=2.5,
+        backtracks=4321,
+        success=True,
+    )
+    phase_logs = [
+        PhaseLog("Phase One", [attempt_one], total_elapsed=1.0, result=None),
+        PhaseLog("Phase Two", [attempt_two], total_elapsed=2.5, result=None),
+    ]
+
+    writer.append_summary(phase_logs, None)
+
+    content = log_path.read_text(encoding="utf-8")
+    assert "Total backtracks performed: 5,555" in content

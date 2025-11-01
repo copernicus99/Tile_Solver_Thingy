@@ -270,6 +270,7 @@ class RunLogWriter:
         if self._summary_written:
             return
         lines: List[str] = ["", "Summary:"]
+        total_backtracks = 0
         for phase_log in logs:
             lines.append(f"{phase_log.phase_name}")
             lines.append(f"  Total elapsed: {phase_log.total_elapsed:.2f}s")
@@ -277,6 +278,7 @@ class RunLogWriter:
                 lines.append("  No board attempts")
             for attempt in phase_log.attempts:
                 width_ft, height_ft = attempt.board_size_ft
+                total_backtracks += attempt.backtracks
                 lines.append(
                     "  Board {w:.2f}ft x {h:.2f}ft ({variant}) | elapsed={elapsed:.2f}s | backtracks={backtracks} | success={success}".format(
                         w=width_ft,
@@ -306,6 +308,9 @@ class RunLogWriter:
                             )
                         )
             lines.append("")
+        lines.append(
+            f"Total backtracks performed: {total_backtracks:,}"
+        )
         if error:
             lines.append(f"Run ended with error: {error}")
         elif result:
