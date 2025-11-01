@@ -21,11 +21,30 @@ class CandidateBoardTests(unittest.TestCase):
     def test_returns_six_boards_reducing_by_one_foot(self):
         total_area_ft = 30.0
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(
-            total_area_ft,
-            default_depth,
-            self.tile_quantities,
-        )
+        def fake_masks(width, height, target_cells, *_, **__):
+            mask = []
+            remaining = target_cells
+            for _ in range(height):
+                row = []
+                for _ in range(width):
+                    if remaining > 0:
+                        row.append(True)
+                        remaining -= 1
+                    else:
+                        row.append(False)
+                mask.append(tuple(row))
+            return ((tuple(mask),), None)
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_generate_pop_out_masks",
+            side_effect=fake_masks,
+        ):
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                self.tile_quantities,
+            )
         expected = [
             (11, 11),
             (9, 9),
@@ -34,19 +53,41 @@ class CandidateBoardTests(unittest.TestCase):
             (3, 3),
             (2, 2),
         ]
-        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
+        self.assertEqual(expected, [(c.width, c.height) for c in candidates[:6]])
+        self.assertTrue(all(c.width == c.height for c in candidates[:6]))
 
     def test_clamps_minimum_board_size_to_one_foot(self):
         unit_area = self.orchestrator.unit_ft ** 2
         total_area_ft = unit_area * 1  # corresponds to one cell squared
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
-        candidates = self.orchestrator._candidate_boards(
-            total_area_ft,
-            default_depth,
-            self.tile_quantities,
-        )
+        def fake_masks(*args, **kwargs):
+            width, height, target_cells = args[0], args[1], args[2]
+            mask = []
+            remaining = target_cells
+            for _ in range(height):
+                row = []
+                for _ in range(width):
+                    if remaining > 0:
+                        row.append(True)
+                        remaining -= 1
+                    else:
+                        row.append(False)
+                mask.append(tuple(row))
+            return ((tuple(mask),), None)
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_generate_pop_out_masks",
+            side_effect=fake_masks,
+        ):
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                self.tile_quantities,
+            )
         expected = [(2, 2)] * 6
-        self.assertEqual(expected, [(c.width, c.height) for c in candidates])
+        self.assertEqual(expected, [(c.width, c.height) for c in candidates[:6]])
+        self.assertTrue(all(c.width == c.height for c in candidates[:6]))
 
     def test_small_fractional_area_must_align_to_grid(self):
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
@@ -73,6 +114,32 @@ class CandidateBoardTests(unittest.TestCase):
         if max_ratio:
             for width, height in rectangle_dims:
                 self.assertLessEqual(width / height, max_ratio)
+
+    def test_step_down_uses_rectangles_when_masks_unavailable(self):
+        total_area_ft = 120.0
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+
+        def no_masks(*args, **kwargs):
+            return (), "No masks"
+
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(SETTINGS, "ALLOW_RECTANGLES", True))
+            stack.enter_context(
+                mock.patch.object(
+                    TileSolverOrchestrator,
+                    "_generate_pop_out_masks",
+                    side_effect=no_masks,
+                )
+            )
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                self.tile_quantities,
+            )
+
+        first_candidates = [(c.width, c.height) for c in candidates[:6]]
+        self.assertTrue(first_candidates, "Expected at least one candidate board")
+        self.assertTrue(all(width != height for width, height in first_candidates))
 
 
 class PhaseBoardAttemptTests(unittest.TestCase):
@@ -230,11 +297,33 @@ class PopOutBoardTests(unittest.TestCase):
         default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
         tile = self.orchestrator.tile_types["1x1"]
         tile_quantities = {tile: int(round(total_area_ft / tile.area_ft2))}
-        candidates = self.orchestrator._candidate_boards(
-            total_area_ft,
-            default_depth,
-            tile_quantities,
-        )
+        def selective_masks(width, height, target_cells, *_, **__):
+            total_cells = width * height
+            if total_cells < target_cells:
+                return (), "Board area is smaller than the tile coverage"
+            mask = []
+            remaining = target_cells
+            for _ in range(height):
+                row = []
+                for _ in range(width):
+                    if remaining > 0:
+                        row.append(True)
+                        remaining -= 1
+                    else:
+                        row.append(False)
+                mask.append(tuple(row))
+            return ((tuple(mask),), None)
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_generate_pop_out_masks",
+            side_effect=selective_masks,
+        ):
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                tile_quantities,
+            )
         unit_area = self.orchestrator.unit_ft ** 2
         target_cells = int(round(total_area_ft / unit_area))
         insufficient = [

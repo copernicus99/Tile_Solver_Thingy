@@ -539,36 +539,62 @@ class TileSolverOrchestrator:
         boards: List[BoardCandidate] = []
         seen_rectangles: Set[Tuple[int, int]] = set()
 
-        def add_candidate(width_cells: int, height_cells: int) -> None:
-            pop_out_masks, mask_reason = self._generate_pop_out_masks(
+        def build_candidate(
+            width_cells: int,
+            height_cells: int,
+            precomputed: Optional[Tuple[
+                Tuple[Tuple[Tuple[bool, ...], ...], ...],
+                Optional[str],
+            ]] = None,
+        ) -> BoardCandidate:
+            if precomputed is None:
+                pop_out_masks, mask_reason = self._generate_pop_out_masks(
+                    width_cells,
+                    height_cells,
+                    target_cells,
+                    max_pop_out_depth,
+                    tile_quantities,
+                )
+            else:
+                pop_out_masks, mask_reason = precomputed
+            return BoardCandidate(
+                width_cells,
+                height_cells,
+                target_cells,
+                pop_out_masks,
+                mask_reason,
+            )
+
+        square_dimensions: List[Tuple[int, int]] = []
+        for reduction in range(6):
+            side_cells = starting_side_cells - reduction * cells_per_foot
+            if side_cells < min_side:
+                side_cells = min_side
+            square_dimensions.append((side_cells, side_cells))
+
+        square_mask_cache: Dict[Tuple[int, int], Tuple[Tuple[Tuple[bool, ...], ...], Optional[str]]] = {}
+        for width_cells, height_cells in square_dimensions:
+            key = (width_cells, height_cells)
+            if key in square_mask_cache:
+                continue
+            square_mask_cache[key] = self._generate_pop_out_masks(
                 width_cells,
                 height_cells,
                 target_cells,
                 max_pop_out_depth,
                 tile_quantities,
             )
-            boards.append(
-                BoardCandidate(
-                    width_cells,
-                    height_cells,
-                    target_cells,
-                    pop_out_masks,
-                    mask_reason,
-                )
-            )
 
-        for reduction in range(6):
-            side_cells = starting_side_cells - reduction * cells_per_foot
-            if side_cells < min_side:
-                side_cells = min_side
-            add_candidate(side_cells, side_cells)
+        square_has_masks = any(
+            bool(square_mask_cache[dimension][0]) for dimension in square_dimensions
+        )
 
+        rectangle_dims: List[Tuple[int, int]] = []
         if getattr(SETTINGS, "ALLOW_RECTANGLES", False):
             max_ratio = getattr(SETTINGS, "MAX_RECTANGLE_ASPECT_RATIO", None)
             if max_ratio is not None and max_ratio <= 1:
                 max_ratio = None
             max_height = int(math.sqrt(target_cells))
-            rectangle_dims: List[Tuple[int, int]] = []
             for height_cells in range(min_side, max_height + 1):
                 if target_cells % height_cells != 0:
                     continue
@@ -588,8 +614,70 @@ class TileSolverOrchestrator:
                 rectangle_dims.append(key)
 
             rectangle_dims.sort(key=lambda dims: (abs(dims[0] - dims[1]), dims[0] * dims[1]))
-            for width_cells, height_cells in rectangle_dims:
-                add_candidate(width_cells, height_cells)
+
+        rectangle_mask_cache: Dict[
+            Tuple[int, int], Tuple[Tuple[Tuple[bool, ...], ...], Optional[str]]
+        ] = {}
+        used_rectangles: Set[Tuple[int, int]] = set()
+
+        use_square_step_down = (
+            square_has_masks
+            or not rectangle_dims
+            or not getattr(SETTINGS, "ALLOW_RECTANGLES", False)
+        )
+
+        if use_square_step_down:
+            for dimension in square_dimensions:
+                pop_out_masks, mask_reason = square_mask_cache[dimension]
+                boards.append(
+                    build_candidate(
+                        dimension[0],
+                        dimension[1],
+                        precomputed=(pop_out_masks, mask_reason),
+                    )
+                )
+        else:
+            step_rectangles = rectangle_dims[: len(square_dimensions)]
+            for width_cells, height_cells in step_rectangles:
+                key = (width_cells, height_cells)
+                if key not in rectangle_mask_cache:
+                    rectangle_mask_cache[key] = self._generate_pop_out_masks(
+                        width_cells,
+                        height_cells,
+                        target_cells,
+                        max_pop_out_depth,
+                        tile_quantities,
+                    )
+                pop_out_masks, mask_reason = rectangle_mask_cache[key]
+                boards.append(
+                    build_candidate(
+                        width_cells,
+                        height_cells,
+                        precomputed=(pop_out_masks, mask_reason),
+                    )
+                )
+                used_rectangles.add(key)
+
+        for width_cells, height_cells in rectangle_dims:
+            key = (width_cells, height_cells)
+            if key in used_rectangles:
+                continue
+            if key not in rectangle_mask_cache:
+                rectangle_mask_cache[key] = self._generate_pop_out_masks(
+                    width_cells,
+                    height_cells,
+                    target_cells,
+                    max_pop_out_depth,
+                    tile_quantities,
+                )
+            pop_out_masks, mask_reason = rectangle_mask_cache[key]
+            boards.append(
+                build_candidate(
+                    width_cells,
+                    height_cells,
+                    precomputed=(pop_out_masks, mask_reason),
+                )
+            )
 
         return boards
 
