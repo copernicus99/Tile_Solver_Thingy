@@ -139,22 +139,70 @@ class CandidateBoardTests(unittest.TestCase):
 
         first_candidates = [(c.width, c.height) for c in candidates[:6]]
         self.assertTrue(first_candidates, "Expected at least one candidate board")
-        rectangles = [(w, h) for w, h in first_candidates if w != h]
-        squares = [(w, h) for w, h in first_candidates if w == h]
-        if rectangles:
-            first_square_index = next(
-                (idx for idx, dims in enumerate(first_candidates) if dims[0] == dims[1]),
-                len(first_candidates),
+        self.assertEqual(
+            first_candidates[0][0],
+            first_candidates[0][1],
+            "Initial board should remain square.",
+        )
+
+        encountered_square = False
+        for dims in first_candidates[1:]:
+            if dims[0] == dims[1]:
+                encountered_square = True
+            else:
+                self.assertFalse(
+                    encountered_square,
+                    "Rectangles should be prioritized before fallback squares.",
+                )
+
+        self.assertTrue(
+            any(w != h for w, h in first_candidates[1:]),
+            "Expected step-down boards to include rectangles when available.",
+        )
+
+    def test_step_down_uses_fallback_rectangles_when_factor_rectangles_missing(self):
+        # Choose a prime number of cells so that no exact rectangle factors exist.
+        total_area_ft = 55.75  # 223 cells with GRID_UNIT_FT = 0.5
+        default_depth = max(getattr(SETTINGS, "MAX_POP_OUT_DEPTH", 2), 1)
+
+        def no_masks(*args, **kwargs):
+            return (), "No masks"
+
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(SETTINGS, "ALLOW_RECTANGLES", True))
+            stack.enter_context(
+                mock.patch.object(
+                    TileSolverOrchestrator,
+                    "_generate_pop_out_masks",
+                    side_effect=no_masks,
+                )
             )
-            self.assertEqual(
-                len(rectangles),
-                first_square_index,
-                "Rectangles should be prioritized before any fallback squares.",
+            candidates = self.orchestrator._candidate_boards(
+                total_area_ft,
+                default_depth,
+                self.tile_quantities,
             )
-        else:
-            self.assertTrue(
-                squares,
-                "Expected fallback squares when no rectangle dimensions are available.",
+
+        first_candidates = [(c.width, c.height) for c in candidates[:6]]
+        self.assertGreaterEqual(len(first_candidates), 2)
+        self.assertEqual(
+            first_candidates[0][0],
+            first_candidates[0][1],
+            "Initial board should remain square when no masks are available.",
+        )
+
+        rectangular_steps = [dims for dims in first_candidates[1:] if dims[0] != dims[1]]
+        self.assertTrue(
+            rectangular_steps,
+            "Expected fallback rectangles for step-down boards when no exact rectangles exist.",
+        )
+        initial_area = first_candidates[0][0] * first_candidates[0][1]
+        for width, height in rectangular_steps:
+            self.assertNotEqual(width, height)
+            self.assertLessEqual(
+                width * height,
+                initial_area,
+                "Fallback rectangles should not increase board area over the initial square.",
             )
 
 
