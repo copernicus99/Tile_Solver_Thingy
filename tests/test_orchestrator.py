@@ -255,6 +255,30 @@ class PhaseBoardAttemptTests(unittest.TestCase):
             "Duplicate board candidates should result in a single attempt",
         )
 
+    def test_phase_board_attempts_skip_unmasked_overage_with_pop_outs(self):
+        mask = tuple(tuple(True for _ in range(12)) for _ in range(12))
+        candidate = BoardCandidate(
+            width=12,
+            height=12,
+            target_cells=143,
+            pop_out_masks=((mask,),),
+        )
+        attempts = list(
+            self.orchestrator._phase_board_attempts(
+                [candidate],
+                allow_pop_outs=True,
+                allow_discards=False,
+            )
+        )
+        self.assertTrue(
+            attempts,
+            "Expected mask attempts to be yielded when pop-outs are allowed",
+        )
+        self.assertTrue(
+            all(mask is not None for _, _, mask, _, _ in attempts),
+            "Unmasked boards that exceed tile coverage should be skipped",
+        )
+
     def test_solve_marks_phases_a_and_c_for_oversized_board_attempts(self):
         orchestrator = self.orchestrator
         selection = {"1x1": 4}

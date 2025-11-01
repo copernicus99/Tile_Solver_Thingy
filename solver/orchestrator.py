@@ -528,7 +528,14 @@ class TileSolverOrchestrator:
             note = None
             if not candidate.pop_out_masks and candidate.mask_reason:
                 note = candidate.mask_reason
-            yield candidate.width, candidate.height, None, None, note
+
+            include_unmasked = (
+                board_area <= target
+                or not allow_pop_outs
+                or not candidate.pop_out_masks
+            )
+            if include_unmasked:
+                yield candidate.width, candidate.height, None, None, note
             if not allow_pop_outs:
                 continue
             for index, mask in enumerate(candidate.pop_out_masks, start=1):
