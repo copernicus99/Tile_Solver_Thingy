@@ -174,7 +174,7 @@
                     <div class="predictor-input">
                         <label class="checkbox-label">
                             <input type="checkbox" id="predictor-plus-toggle" data-config-key="plus_toggle">
-                            Allow plus adjacency
+                            Allow plus intersections
                         </label>
                     </div>
                     <div class="predictor-input">
@@ -460,7 +460,14 @@
             return overrides;
         }
 
+        const predictorKeyLabels = {
+            plus_toggle: 'Plus Restriction',
+        };
+
         function formatKeyLabel(key) {
+            if (Object.prototype.hasOwnProperty.call(predictorKeyLabels, key)) {
+                return predictorKeyLabels[key];
+            }
             return key
                 .replace(/_/g, ' ')
                 .replace(/\b\w/g, (char) => char.toUpperCase());
