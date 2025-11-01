@@ -740,7 +740,7 @@ button[type="submit"]:hover {
     font-weight: 600;
 }
 
-.overlay-stats .grid-variant {
+.overlay-stats .grid-backtracks {
     display: block;
     font-size: 0.95rem;
     font-weight: 500;

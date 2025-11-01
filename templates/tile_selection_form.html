@@ -860,12 +860,10 @@
 
         function buildAttemptDisplay({
             boardLabel,
-            variantLabel,
             attemptIndex,
             totalAttempts,
             timeLimitSec,
             attemptElapsed,
-            backtracks,
         }) {
             const lines = [];
             const hasAttemptIndex = typeof attemptIndex === 'number' && attemptIndex > 0;
@@ -888,11 +886,6 @@
                 lines.push(`Quota ${formatSeconds(parsedTimeLimit)}`);
             }
 
-            const parsedBacktracks = Number(backtracks);
-            if (Number.isFinite(parsedBacktracks)) {
-                lines.push(`Backtracks ${formatIntegerWithSeparators(parsedBacktracks)}`);
-            }
-
             return lines.join('\n');
         }
 
@@ -903,7 +896,7 @@
             return `${size[0].toFixed(1)} ft × ${size[1].toFixed(1)} ft`;
         }
 
-        function updateGridDisplay(boardLabel, variantLabel) {
+        function updateGridDisplay({ boardLabel, backtracks }) {
             if (!gridText) {
                 return;
             }
@@ -911,8 +904,10 @@
                 gridText.textContent = '—';
                 return;
             }
-            if (variantLabel) {
-                gridText.innerHTML = `${boardLabel}<br><span class="grid-variant">${variantLabel}</span>`;
+            const parsedBacktracks = Number(backtracks);
+            if (Number.isFinite(parsedBacktracks)) {
+                const formattedBacktracks = formatIntegerWithSeparators(parsedBacktracks);
+                gridText.innerHTML = `${boardLabel}<br><span class="grid-backtracks">Backtracks ${formattedBacktracks}</span>`;
             } else {
                 gridText.textContent = boardLabel;
             }
@@ -945,15 +940,16 @@
                     break;
                 case 'attempt_started':
                     const boardLabel = formatBoardSize(data.board_size_ft);
-                    updateGridDisplay(boardLabel, data.variant_label);
+                    updateGridDisplay({
+                        boardLabel,
+                        backtracks: data.backtracks,
+                    });
                     attemptText.textContent = buildAttemptDisplay({
                         boardLabel,
-                        variantLabel: data.variant_label,
                         attemptIndex: data.attempt_index,
                         totalAttempts: data.total_attempts,
                         timeLimitSec: data.time_limit_sec,
                         attemptElapsed: data.attempt_elapsed,
-                        backtracks: data.backtracks,
                     });
                     setStatusFromVariant(data);
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
@@ -965,15 +961,16 @@
                 case 'attempt_completed':
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabelCompleted = formatBoardSize(data.board_size_ft);
-                        updateGridDisplay(boardLabelCompleted, data.variant_label);
+                        updateGridDisplay({
+                            boardLabel: boardLabelCompleted,
+                            backtracks: data.backtracks,
+                        });
                         attemptText.textContent = buildAttemptDisplay({
                             boardLabel: boardLabelCompleted,
-                            variantLabel: data.variant_label,
                             attemptIndex: data.attempt_index,
                             totalAttempts: data.total_attempts,
                             timeLimitSec: data.time_limit_sec,
                             attemptElapsed: data.attempt_elapsed,
-                            backtracks: data.backtracks,
                         });
                     }
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
@@ -991,15 +988,16 @@
                     setStatusFromVariant(data);
                     if (Array.isArray(data.board_size_ft)) {
                         const boardLabel = formatBoardSize(data.board_size_ft);
-                        updateGridDisplay(boardLabel, data.variant_label);
+                        updateGridDisplay({
+                            boardLabel,
+                            backtracks: data.backtracks,
+                        });
                         attemptText.textContent = buildAttemptDisplay({
                             boardLabel,
-                            variantLabel: data.variant_label,
                             attemptIndex: data.attempt_index,
                             totalAttempts: data.total_attempts,
                             timeLimitSec: data.time_limit_sec,
                             attemptElapsed: data.attempt_elapsed,
-                            backtracks: data.backtracks,
                         });
                     }
                     elapsedText.textContent = formatSeconds(data.overall_elapsed);
