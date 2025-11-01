@@ -530,7 +530,16 @@
                     const discards = _truthy(phase.allow_discards) ? 'discards' : 'no discards';
                     const popOuts = _truthy(phase.allow_pop_outs) ? 'pop-outs' : 'no pop-outs';
                     const timeText = formatSecondsDisplay(phase.time_limit_sec);
-                    item.textContent = `${phase.name}: ${timeText}, ${rotation}, ${discards}, ${popOuts}`;
+
+                    const label = document.createElement('span');
+                    label.className = 'predictor-phase-label';
+                    label.textContent = `${phase.name}:`;
+
+                    const details = document.createElement('span');
+                    details.className = 'predictor-phase-details';
+                    details.textContent = `${timeText}, ${rotation}, ${discards}, ${popOuts}`;
+
+                    item.append(label, details);
                     list.appendChild(item);
                 });
                 dd.appendChild(list);

@@ -627,9 +627,27 @@ button[type="submit"]:hover {
     gap: 0.35rem;
 }
 
+.predictor-config dd .predictor-phase-list {
+    text-align: left;
+}
+
 .predictor-phase-list li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
     color: rgba(245, 247, 250, 0.72);
     font-size: 0.9rem;
+}
+
+.predictor-phase-label {
+    font-weight: 600;
+    color: rgba(245, 247, 250, 0.8);
+    white-space: nowrap;
+}
+
+.predictor-phase-details {
+    color: inherit;
 }
 
 .predictor-footnote {
