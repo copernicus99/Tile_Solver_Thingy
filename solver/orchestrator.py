@@ -4,6 +4,7 @@ import math
 import random
 import time
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from config import SETTINGS, PhaseConfig
@@ -61,6 +62,11 @@ class PhaseLog:
     result: Optional[SolveResult]
 
 
+class RectangleInsertionPolicy(Enum):
+    ON_DEMAND = auto()
+    INTERLEAVED = auto()
+
+
 class TileSolverOrchestrator:
     def __init__(self) -> None:
         self.unit_ft = SETTINGS.GRID_UNIT_FT
@@ -115,10 +121,28 @@ class TileSolverOrchestrator:
         total_allotment = sum(
             phase.time_limit_sec or 0.0 for phase in phases if phase.time_limit_sec is not None
         )
-        candidate_boards = list(
-            self._candidate_boards(total_area_ft, max_pop_out_depth, tile_quantities)
+        candidate_cache: Dict[Tuple[int, int], BoardCandidate] = {}
+        square_focused_candidates = self._candidate_boards(
+            total_area_ft,
+            max_pop_out_depth,
+            tile_quantities,
+            rectangle_policy=RectangleInsertionPolicy.ON_DEMAND,
+            board_cache=candidate_cache,
         )
-        for candidate in candidate_boards:
+        rectangle_interleaved_candidates = self._candidate_boards(
+            total_area_ft,
+            max_pop_out_depth,
+            tile_quantities,
+            rectangle_policy=RectangleInsertionPolicy.INTERLEAVED,
+            board_cache=candidate_cache,
+        )
+        candidate_boards = {
+            SETTINGS.PHASE_A.name: square_focused_candidates,
+            SETTINGS.PHASE_C.name: square_focused_candidates,
+            SETTINGS.PHASE_B.name: rectangle_interleaved_candidates,
+            SETTINGS.PHASE_D.name: rectangle_interleaved_candidates,
+        }
+        for candidate in candidate_cache.values():
             mask_count = len(candidate.pop_out_masks)
             status = "passed" if mask_count else "failed"
             emit(
@@ -133,8 +157,8 @@ class TileSolverOrchestrator:
                 reason=candidate.mask_reason,
             )
         tileset_is_square = False
-        if candidate_boards:
-            target_cells = candidate_boards[0].target_cells
+        if square_focused_candidates:
+            target_cells = square_focused_candidates[0].target_cells
             root = math.isqrt(target_cells)
             tileset_is_square = root * root == target_cells
         for phase_index, phase in enumerate(phases):
@@ -153,9 +177,10 @@ class TileSolverOrchestrator:
                 overall_elapsed=time.time() - overall_start,
             )
             allow_overage = phase in (SETTINGS.PHASE_A, SETTINGS.PHASE_C)
+            phase_pool = candidate_boards.get(phase.name, square_focused_candidates)
             phase_candidates = list(
                 self._phase_board_attempts(
-                    candidate_boards,
+                    phase_pool,
                     phase.allow_pop_outs,
                     phase.allow_discards,
                     allow_overage_without_popouts=allow_overage,
@@ -464,7 +489,7 @@ class TileSolverOrchestrator:
 
     def _phase_board_attempts(
         self,
-        candidates: Sequence[BoardCandidate],
+        phase_pool: Sequence[BoardCandidate],
         allow_pop_outs: bool,
         allow_discards: bool,
         *,
@@ -479,7 +504,7 @@ class TileSolverOrchestrator:
         ]
     ]:
         yielded_initial_boards: Set[Tuple[int, int]] = set()
-        for candidate in candidates:
+        for candidate in phase_pool:
             board_area = candidate.width * candidate.height
             target = candidate.target_cells
             if not allow_discards and board_area < target:
@@ -514,6 +539,9 @@ class TileSolverOrchestrator:
         total_area_ft: float,
         max_pop_out_depth: int,
         tile_quantities: Dict[TileType, int],
+        *,
+        rectangle_policy: RectangleInsertionPolicy = RectangleInsertionPolicy.ON_DEMAND,
+        board_cache: Optional[Dict[Tuple[int, int], BoardCandidate]] = None,
     ) -> List[BoardCandidate]:
         if total_area_ft <= 0:
             return []
@@ -537,6 +565,8 @@ class TileSolverOrchestrator:
         starting_side_cells = max(min_side, int(math.ceil(math.sqrt(target_cells))))
 
         boards: List[BoardCandidate] = []
+        if board_cache is None:
+            board_cache = {}
         seen_rectangles: Set[Tuple[int, int]] = set()
 
         def build_candidate(
@@ -547,6 +577,10 @@ class TileSolverOrchestrator:
                 Optional[str],
             ]] = None,
         ) -> BoardCandidate:
+            key = (width_cells, height_cells)
+            cached_candidate = board_cache.get(key)
+            if cached_candidate is not None:
+                return cached_candidate
             if precomputed is None:
                 pop_out_masks, mask_reason = self._generate_pop_out_masks(
                     width_cells,
@@ -557,13 +591,15 @@ class TileSolverOrchestrator:
                 )
             else:
                 pop_out_masks, mask_reason = precomputed
-            return BoardCandidate(
+            candidate = BoardCandidate(
                 width_cells,
                 height_cells,
                 target_cells,
                 pop_out_masks,
                 mask_reason,
             )
+            board_cache[key] = candidate
+            return candidate
 
         square_dimensions: List[Tuple[int, int]] = []
         for reduction in range(6):
@@ -677,36 +713,96 @@ class TileSolverOrchestrator:
         rectangle_index = 0
         remaining_square_candidates = square_candidates[1:]
 
-        for square_candidate in remaining_square_candidates:
-            chosen_rectangle: Optional[Tuple[int, int]] = None
-            if not square_has_masks and rectangles_allowed:
-                if rectangle_index < len(rectangle_dims):
-                    chosen_rectangle = rectangle_dims[rectangle_index]
-                    rectangle_index += 1
-                elif not rectangle_dims:
-                    chosen_rectangle = build_fallback_rectangle(square_candidate.width)
-            if not chosen_rectangle or chosen_rectangle[0] == chosen_rectangle[1]:
-                boards.append(square_candidate)
-                continue
-            width_cells, height_cells = chosen_rectangle
-            key = (width_cells, height_cells)
-            if key not in rectangle_mask_cache:
-                rectangle_mask_cache[key] = self._generate_pop_out_masks(
-                    width_cells,
-                    height_cells,
-                    target_cells,
-                    max_pop_out_depth,
-                    tile_quantities,
-                )
-            pop_out_masks, mask_reason = rectangle_mask_cache[key]
-            boards.append(
-                build_candidate(
+        def rectangle_candidate_for(
+            *,
+            side_cells: int,
+            allow_fallback: bool,
+        ) -> Optional[BoardCandidate]:
+            nonlocal rectangle_index
+            if not rectangles_allowed:
+                return None
+            while rectangle_index < len(rectangle_dims):
+                width_cells, height_cells = rectangle_dims[rectangle_index]
+                rectangle_index += 1
+                key = (width_cells, height_cells)
+                if key in used_rectangles:
+                    continue
+                if key not in rectangle_mask_cache:
+                    rectangle_mask_cache[key] = self._generate_pop_out_masks(
+                        width_cells,
+                        height_cells,
+                        target_cells,
+                        max_pop_out_depth,
+                        tile_quantities,
+                    )
+                pop_out_masks, mask_reason = rectangle_mask_cache[key]
+                candidate = build_candidate(
                     width_cells,
                     height_cells,
                     precomputed=(pop_out_masks, mask_reason),
                 )
+                used_rectangles.add(key)
+                return candidate
+            if not allow_fallback:
+                return None
+            fallback_dims = build_fallback_rectangle(side_cells)
+            if (
+                fallback_dims
+                and fallback_dims[0] != fallback_dims[1]
+                and fallback_dims not in used_rectangles
+            ):
+                width_cells, height_cells = fallback_dims
+                key = (width_cells, height_cells)
+                if key not in rectangle_mask_cache:
+                    rectangle_mask_cache[key] = self._generate_pop_out_masks(
+                        width_cells,
+                        height_cells,
+                        target_cells,
+                        max_pop_out_depth,
+                        tile_quantities,
+                    )
+                pop_out_masks, mask_reason = rectangle_mask_cache[key]
+                candidate = build_candidate(
+                    width_cells,
+                    height_cells,
+                    precomputed=(pop_out_masks, mask_reason),
+                )
+                used_rectangles.add(key)
+                return candidate
+            return None
+
+        if (
+            rectangles_allowed
+            and rectangle_policy is RectangleInsertionPolicy.INTERLEAVED
+        ):
+            first_rectangle = rectangle_candidate_for(
+                side_cells=square_candidates[0].width,
+                allow_fallback=not rectangle_dims,
             )
-            used_rectangles.add(key)
+            if first_rectangle:
+                boards.append(first_rectangle)
+
+        for square_candidate in remaining_square_candidates:
+            if (
+                rectangles_allowed
+                and rectangle_policy is RectangleInsertionPolicy.ON_DEMAND
+                and not square_has_masks
+            ):
+                rectangle_candidate = rectangle_candidate_for(
+                    side_cells=square_candidate.width,
+                    allow_fallback=not rectangle_dims,
+                )
+                if rectangle_candidate:
+                    boards.append(rectangle_candidate)
+                    continue
+            boards.append(square_candidate)
+            if rectangle_policy is RectangleInsertionPolicy.INTERLEAVED:
+                rectangle_candidate = rectangle_candidate_for(
+                    side_cells=square_candidate.width,
+                    allow_fallback=not rectangle_dims,
+                )
+                if rectangle_candidate:
+                    boards.append(rectangle_candidate)
 
         for width_cells, height_cells in rectangle_dims[rectangle_index:]:
             key = (width_cells, height_cells)

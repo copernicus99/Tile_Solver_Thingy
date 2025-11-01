@@ -8,7 +8,11 @@ from unittest import mock
 from config import SETTINGS
 
 from solver.backtracking_solver import BacktrackingSolver, SolverOptions
-from solver.orchestrator import BoardCandidate, TileSolverOrchestrator
+from solver.orchestrator import (
+    BoardCandidate,
+    RectangleInsertionPolicy,
+    TileSolverOrchestrator,
+)
 from solver.models import Placement, SolveRequest, SolveResult, SolverStats, TileInstance, TileType
 
 
@@ -276,6 +280,59 @@ class PhaseBoardAttemptTests(unittest.TestCase):
         )
 
 
+class PhasePoolIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.orchestrator = TileSolverOrchestrator()
+
+    def test_phase_d_pool_retains_rectangles_when_square_phase_has_masks(self):
+        selection = {"1x1": 400}
+        phase_pools: List[List[BoardCandidate]] = []
+
+        def fake_masks(width, height, target_cells, *_, **__):
+            mask = tuple(tuple(True for _ in range(width)) for _ in range(height))
+            if width == height:
+                return ((mask,), None)
+            return (), "Rectangles lack masks"
+
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_generate_pop_out_masks",
+            side_effect=fake_masks,
+        ), mock.patch.object(
+            TileSolverOrchestrator,
+            "_phase_board_attempts",
+            autospec=True,
+        ) as patched_attempts:
+
+            def capture(self, pool, *args, **kwargs):
+                phase_pools.append(list(pool))
+                return []
+
+            patched_attempts.side_effect = capture
+            self.orchestrator.solve(selection)
+
+        self.assertEqual(
+            len(phase_pools),
+            2,
+            "Expected both phases in the {C, D} group to request board pools.",
+        )
+        square_pool, rectangle_pool = phase_pools
+        self.assertTrue(square_pool, "Square-focused pool should include candidates")
+        self.assertEqual(
+            square_pool[0].width,
+            square_pool[0].height,
+            "Phase C should begin with a square board when masks exist.",
+        )
+        rectangle_boards = [
+            candidate for candidate in rectangle_pool if candidate.width != candidate.height
+        ]
+        self.assertGreaterEqual(
+            len(rectangle_boards),
+            2,
+            "Phase D pool should interleave multiple rectangle boards despite Phase C using squares.",
+        )
+
+
 class PopOutBoardTests(unittest.TestCase):
     def setUp(self):
         self.orchestrator = TileSolverOrchestrator()
@@ -297,14 +354,33 @@ class PopOutBoardTests(unittest.TestCase):
         tile = self.orchestrator.tile_types[tile_name]
         expected_depth = self.orchestrator._derive_pop_out_depth_limit({tile: 1})
 
-        with mock.patch.object(TileSolverOrchestrator, "_candidate_boards", return_value=[]) as mock_boards:
+        with mock.patch.object(
+            TileSolverOrchestrator,
+            "_candidate_boards",
+            return_value=[],
+        ) as mock_boards:
             self.orchestrator.solve({tile_name: 1})
 
-        mock_boards.assert_called()
-        args = mock_boards.call_args[0]
-        self.assertEqual(expected_depth, args[1])
-        quantities = args[2]
+        self.assertGreaterEqual(mock_boards.call_count, 2)
+        first_call = mock_boards.call_args_list[0]
+        second_call = mock_boards.call_args_list[1]
+
+        first_args, first_kwargs = first_call
+        second_args, second_kwargs = second_call
+
+        self.assertEqual(expected_depth, first_args[1])
+        quantities = first_args[2]
         self.assertIsInstance(quantities, dict)
+        self.assertIs(
+            first_kwargs["rectangle_policy"], RectangleInsertionPolicy.ON_DEMAND
+        )
+        self.assertIn("board_cache", first_kwargs)
+        self.assertIsInstance(first_kwargs["board_cache"], dict)
+
+        self.assertIs(
+            second_kwargs["rectangle_policy"], RectangleInsertionPolicy.INTERLEAVED
+        )
+        self.assertIs(second_kwargs["board_cache"], first_kwargs["board_cache"])
 
     def test_candidate_masks_preserve_target_area(self):
         total_area_ft = 30.0
