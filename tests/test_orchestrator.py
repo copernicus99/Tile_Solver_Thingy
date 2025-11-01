@@ -139,7 +139,23 @@ class CandidateBoardTests(unittest.TestCase):
 
         first_candidates = [(c.width, c.height) for c in candidates[:6]]
         self.assertTrue(first_candidates, "Expected at least one candidate board")
-        self.assertTrue(all(width != height for width, height in first_candidates))
+        rectangles = [(w, h) for w, h in first_candidates if w != h]
+        squares = [(w, h) for w, h in first_candidates if w == h]
+        if rectangles:
+            first_square_index = next(
+                (idx for idx, dims in enumerate(first_candidates) if dims[0] == dims[1]),
+                len(first_candidates),
+            )
+            self.assertEqual(
+                len(rectangles),
+                first_square_index,
+                "Rectangles should be prioritized before any fallback squares.",
+            )
+        else:
+            self.assertTrue(
+                squares,
+                "Expected fallback squares when no rectangle dimensions are available.",
+            )
 
 
 class PhaseBoardAttemptTests(unittest.TestCase):

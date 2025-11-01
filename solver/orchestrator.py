@@ -626,18 +626,22 @@ class TileSolverOrchestrator:
             or not getattr(SETTINGS, "ALLOW_RECTANGLES", False)
         )
 
-        if use_square_step_down:
-            for dimension in square_dimensions:
-                pop_out_masks, mask_reason = square_mask_cache[dimension]
-                boards.append(
-                    build_candidate(
-                        dimension[0],
-                        dimension[1],
-                        precomputed=(pop_out_masks, mask_reason),
-                    )
+        square_candidates: List[BoardCandidate] = []
+        for width_cells, height_cells in square_dimensions:
+            pop_out_masks, mask_reason = square_mask_cache[(width_cells, height_cells)]
+            square_candidates.append(
+                build_candidate(
+                    width_cells,
+                    height_cells,
+                    precomputed=(pop_out_masks, mask_reason),
                 )
+            )
+
+        if use_square_step_down:
+            boards.extend(square_candidates)
         else:
             step_rectangles = rectangle_dims[: len(square_dimensions)]
+            step_candidates: List[BoardCandidate] = []
             for width_cells, height_cells in step_rectangles:
                 key = (width_cells, height_cells)
                 if key not in rectangle_mask_cache:
@@ -649,7 +653,7 @@ class TileSolverOrchestrator:
                         tile_quantities,
                     )
                 pop_out_masks, mask_reason = rectangle_mask_cache[key]
-                boards.append(
+                step_candidates.append(
                     build_candidate(
                         width_cells,
                         height_cells,
@@ -657,6 +661,11 @@ class TileSolverOrchestrator:
                     )
                 )
                 used_rectangles.add(key)
+
+            boards.extend(step_candidates)
+
+            if len(step_candidates) < len(square_candidates):
+                boards.extend(square_candidates[len(step_candidates):])
 
         for width_cells, height_cells in rectangle_dims:
             key = (width_cells, height_cells)
