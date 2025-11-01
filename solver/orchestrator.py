@@ -720,6 +720,18 @@ class TileSolverOrchestrator:
         rectangle_index = 0
         remaining_square_candidates = square_candidates[1:]
 
+        if remaining_square_candidates:
+            def square_candidate_heaviness(candidate: BoardCandidate) -> Tuple[float, int, int]:
+                board_area = candidate.width * candidate.height
+                slack_cells = max(candidate.target_cells - board_area, 0)
+                slack_ratio = (
+                    slack_cells / candidate.target_cells if candidate.target_cells > 0 else 0.0
+                )
+                mask_penalty = 1 if candidate.pop_out_masks else 0
+                return (slack_ratio, mask_penalty, -board_area)
+
+            remaining_square_candidates.sort(key=square_candidate_heaviness)
+
         def rectangle_candidate_for(
             *,
             side_cells: int,
