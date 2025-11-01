@@ -620,11 +620,42 @@ class TileSolverOrchestrator:
         ] = {}
         used_rectangles: Set[Tuple[int, int]] = set()
 
-        use_square_step_down = (
-            square_has_masks
-            or not rectangle_dims
-            or not getattr(SETTINGS, "ALLOW_RECTANGLES", False)
-        )
+        ratio_limit = getattr(SETTINGS, "MAX_RECTANGLE_ASPECT_RATIO", None)
+        if ratio_limit is not None and ratio_limit <= 1:
+            ratio_limit = None
+
+        def build_fallback_rectangle(side_cells: int) -> Optional[Tuple[int, int]]:
+            area = side_cells * side_cells
+            if area <= 0:
+                return None
+            best_area = -1
+            best_dims: Optional[Tuple[int, int]] = None
+            for height_cells in range(side_cells - 1, min_side - 1, -1):
+                if height_cells < min_side:
+                    break
+                width_cells = area // height_cells
+                if width_cells < min_side:
+                    continue
+                while width_cells * height_cells > area and width_cells > height_cells:
+                    width_cells -= 1
+                while (
+                    width_cells > height_cells
+                    and ratio_limit is not None
+                    and height_cells > 0
+                    and width_cells / height_cells > ratio_limit
+                ):
+                    width_cells -= 1
+                if width_cells <= height_cells or width_cells < min_side:
+                    continue
+                board_area = width_cells * height_cells
+                if board_area <= 0 or board_area > area:
+                    continue
+                if board_area > best_area:
+                    best_area = board_area
+                    best_dims = (width_cells, height_cells)
+                    if board_area == area:
+                        break
+            return best_dims
 
         square_candidates: List[BoardCandidate] = []
         for width_cells, height_cells in square_dimensions:
@@ -637,37 +668,47 @@ class TileSolverOrchestrator:
                 )
             )
 
-        if use_square_step_down:
-            boards.extend(square_candidates)
-        else:
-            step_rectangles = rectangle_dims[: len(square_dimensions)]
-            step_candidates: List[BoardCandidate] = []
-            for width_cells, height_cells in step_rectangles:
-                key = (width_cells, height_cells)
-                if key not in rectangle_mask_cache:
-                    rectangle_mask_cache[key] = self._generate_pop_out_masks(
-                        width_cells,
-                        height_cells,
-                        target_cells,
-                        max_pop_out_depth,
-                        tile_quantities,
-                    )
-                pop_out_masks, mask_reason = rectangle_mask_cache[key]
-                step_candidates.append(
-                    build_candidate(
-                        width_cells,
-                        height_cells,
-                        precomputed=(pop_out_masks, mask_reason),
-                    )
+        if not square_candidates:
+            return boards
+
+        boards.append(square_candidates[0])
+
+        rectangles_allowed = getattr(SETTINGS, "ALLOW_RECTANGLES", False)
+        rectangle_index = 0
+        remaining_square_candidates = square_candidates[1:]
+
+        for square_candidate in remaining_square_candidates:
+            chosen_rectangle: Optional[Tuple[int, int]] = None
+            if not square_has_masks and rectangles_allowed:
+                if rectangle_index < len(rectangle_dims):
+                    chosen_rectangle = rectangle_dims[rectangle_index]
+                    rectangle_index += 1
+                elif not rectangle_dims:
+                    chosen_rectangle = build_fallback_rectangle(square_candidate.width)
+            if not chosen_rectangle or chosen_rectangle[0] == chosen_rectangle[1]:
+                boards.append(square_candidate)
+                continue
+            width_cells, height_cells = chosen_rectangle
+            key = (width_cells, height_cells)
+            if key not in rectangle_mask_cache:
+                rectangle_mask_cache[key] = self._generate_pop_out_masks(
+                    width_cells,
+                    height_cells,
+                    target_cells,
+                    max_pop_out_depth,
+                    tile_quantities,
                 )
-                used_rectangles.add(key)
+            pop_out_masks, mask_reason = rectangle_mask_cache[key]
+            boards.append(
+                build_candidate(
+                    width_cells,
+                    height_cells,
+                    precomputed=(pop_out_masks, mask_reason),
+                )
+            )
+            used_rectangles.add(key)
 
-            boards.extend(step_candidates)
-
-            if len(step_candidates) < len(square_candidates):
-                boards.extend(square_candidates[len(step_candidates):])
-
-        for width_cells, height_cells in rectangle_dims:
+        for width_cells, height_cells in rectangle_dims[rectangle_index:]:
             key = (width_cells, height_cells)
             if key in used_rectangles:
                 continue
