@@ -419,7 +419,7 @@ def index():
     return render_template(
         "tile_selection_form.html",
         tile_options=SETTINGS.TILE_OPTIONS,
-        max_quantity=10,
+        max_quantity=11,
         grid_unit=SETTINGS.GRID_UNIT_FT,
         tile_bags=load_tile_bags(),
         predictor_defaults=_predictor_defaults(),
@@ -559,7 +559,7 @@ def _parse_selection(form_data) -> Dict[str, int]:
             count = int(value)
         except (TypeError, ValueError):
             count = 0
-        selection[name] = max(0, min(10, count))
+        selection[name] = max(0, min(11, count))
     return selection
 
 
