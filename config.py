@@ -39,20 +39,20 @@ class Settings:
     # With the default GRID_UNIT_FT of 0.5, a 10 ft board (20 cells) and the
     # default ratio of 0.6 results in a 6 ft (12 cell) limit, matching the
     # previous fixed behaviour.
-    MAX_EDGE_RATIO = 0.6
+    MAX_EDGE_RATIO = 1   # was .09
 
-    MAX_EDGE_FT = 6.0
+    MAX_EDGE_FT = 8.0
 
     # The 6 ft straight-edge limit applies to both internal seams and the board
     # perimeter.
     MAX_EDGE_INSIDE_ONLY = False
 
     # True means solver will enforce the “no plus intersections”
-    PLUS_TOGGLE = True
+    PLUS_TOGGLE = False
 
     # A limit of ``0`` disables the adjacency restriction so that phases can
     # freely use duplicate tile shapes when the inventory requires it.
-    SAME_SHAPE_LIMIT = 1
+    SAME_SHAPE_LIMIT = 0
     MAX_POP_OUT_DEPTH = 2
 
     MASK_GENERATION_ATTEMPTS = 10
@@ -73,7 +73,7 @@ class Settings:
     PHASE_B = PhaseConfig(
         "Phase B",
         allow_rotation=True,
-        allow_discards=True,
+        allow_discards=False,
         allow_pop_outs=True,
         time_limit_sec=1800.0,
         first_board_time_share=.2,
@@ -89,7 +89,7 @@ class Settings:
     PHASE_D = PhaseConfig(
         "Phase D",
         allow_rotation=True,
-        allow_discards=True,
+        allow_discards=False,
         allow_pop_outs=True,
         time_limit_sec=1800.0,
         first_board_time_share=.2,
