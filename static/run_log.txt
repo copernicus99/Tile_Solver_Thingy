@@ -1,76 +1,52 @@
 TILE SOLVER RUN LOG
-Generated at: 2025-11-01T11:33:29-04:00
-MAX_EDGE_FT=6.0
+Generated at: 2025-11-01T21:15:48-04:00
+MAX_EDGE_FT=8.0
 PLUS_TOGGLE=True
 SAME_SHAPE_LIMIT=1
 Tile counts:
-  - 1x1: 10 (1.0ft × 1.0ft)
-  - 1x1.5: 10 (1.0ft × 1.5ft)
-  - 1x2: 9 (1.0ft × 2.0ft)
-  - 1.5x1.5: 6 (1.5ft × 1.5ft)
-  - 1.5x2: 6 (1.5ft × 2.0ft)
-  - 1.5x2.5: 6 (1.5ft × 2.5ft)
-  - 1.5x3: 4 (1.5ft × 3.0ft)
-  - 2x2: 3 (2.0ft × 2.0ft)
-  - 2x2.5: 2 (2.0ft × 2.5ft)
-  - 2x3: 1 (2.0ft × 3.0ft)
-  Total tiles: 57
-  Total coverage: 143.00 ft²
+  - 2x2: 4 (2.0ft × 2.0ft)
+  Total tiles: 4
+  Total coverage: 16.00 ft²
 
 Events:
 Run started.
-  Phase 1: Phase C (time limit: 1200.00s, rotation: yes, discards: no, pop-outs: no)
-  Phase 2: Phase D (time limit: 1800.00s, rotation: yes, discards: yes, pop-outs: yes)
+  Phase 1: Phase A (time limit: 1200.00s, rotation: yes, discards: no, pop-outs: no)
+  Phase 2: Phase B (time limit: 1800.00s, rotation: yes, discards: no, pop-outs: yes)
   Total allotted time: 3000.00s
-
-Mask validation=Failed for board 12.00ft x 12.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 11.00ft x 11.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 10.00ft x 10.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 9.00ft x 9.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 8.00ft x 8.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 7.00ft x 7.00ft (no masks).
-  Reason: No masks generated: all 10 random candidates failed validation.
-Mask validation=Failed for board 13.00ft x 11.00ft (no masks).
-
+Mask validation=Failed for board 4.00ft x 4.00ft (no masks).
   Reason: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
-Phase 1 (Phase C) started. Time limit: 1200.00s.
-Attempt 1 started on board 13.00ft x 11.00ft (Rectangle Fit).
-Attempt 1 (Rectangle Fit) completed in 1200.09s (success: no, backtracks: 910913).
-Phase Phase C completed in 1200.09s (success: no).
-
-Phase 2 (Phase D) started. Time limit: 1800.00s.
-Attempt 1 started on board 12.00ft x 12.00ft (Square Fit w Discards).
-Attempt 1 (Square Fit w Discards) completed in 360.09s (success: no, backtracks: 250155).
-Attempt 2 started on board 13.00ft x 11.00ft (Rectangle Fit w Discards).
-Attempt 2 (Rectangle Fit w Discards) completed in 240.09s (success: no, backtracks: 156869).
-Attempt 3 started on board 11.00ft x 11.00ft (Square Fit w Discards).
-Attempt 3 (Square Fit w Discards) completed in 266.04s (success: no, backtracks: 84638).
-Attempt 4 started on board 10.00ft x 10.00ft (Square Fit w Discards).
-Attempt 4 (Square Fit w Discards) completed in 7190.15s (success: no, backtracks: 81164).
-Phase Phase D completed in 8056.39s (success: no).
-Run completed in 9256.94s (success: no).
+Mask validation=Failed for board 3.00ft x 3.00ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 2.00ft x 2.00ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 1.00ft x 1.00ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 3.00ft x 2.50ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 2.00ft x 1.50ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Mask validation=Failed for board 4.50ft x 3.50ft (no masks).
+  Reason: No masks generated: all 10 random candidates failed validation.
+Phase 1 (Phase A) started. Time limit: 1200.00s.
+Attempt 1 started on board 4.00ft x 4.00ft (Square Fit).
+Attempt 1 (Square Fit) completed in 0.00s (success: no, backtracks: 3).
+Phase Phase A completed in 0.00s (success: no).
+Phase 2 (Phase B) started. Time limit: 1800.00s.
+Attempt 1 started on board 4.00ft x 4.00ft (Square Fit).
+Attempt 1 (Square Fit) completed in 0.00s (success: no, backtracks: 3).
+Phase Phase B completed in 0.00s (success: no).
+Run completed in 0.02s (success: no).
 
 Summary:
-Phase C
-  Total elapsed: 1200.09s
-  Board 13.00ft x 11.00ft (Rectangle Fit) | elapsed=1200.09s | backtracks=910913 | success=no
+Phase A
+  Total elapsed: 0.00s
+  Board 4.00ft x 4.00ft (Square Fit) | elapsed=0.00s | backtracks=3 | success=no
     Note: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
 
-Phase D
-  Total elapsed: 8056.39s
-  Board 12.00ft x 12.00ft (Square Fit w Discards) | elapsed=360.09s | backtracks=250155 | success=no
-    Note: No masks generated: all 10 random candidates failed validation.
-  Board 13.00ft x 11.00ft (Rectangle Fit w Discards) | elapsed=240.09s | backtracks=156869 | success=no
+Phase B
+  Total elapsed: 0.00s
+  Board 4.00ft x 4.00ft (Square Fit) | elapsed=0.00s | backtracks=3 | success=no
     Note: No masks generated: board area matches tile coverage so there is no slack for pop-outs.
-  Board 11.00ft x 11.00ft (Square Fit w Discards) | elapsed=266.04s | backtracks=84638 | success=no
-    Note: No masks generated: all 10 random candidates failed validation.
-  Board 10.00ft x 10.00ft (Square Fit w Discards) | elapsed=7190.15s | backtracks=81164 | success=no
-    Note: No masks generated: all 10 random candidates failed validation.
 
-Total backtracks performed: 1,483,739
+Total backtracks performed: 6
 Run completed without a solution.
